@@ -3,13 +3,10 @@
 import { useUIStore } from "@/store/ui-store";
 
 export function ResetViewButton() {
-  const selectedNodeId = useUIStore((s) => s.selectedNodeId);
-  const selectedClusterId = useUIStore((s) => s.selectedClusterId);
-  const isZoomedIn = useUIStore((s) => s.isZoomedIn);
+  const isCameraMoved = useUIStore((s) => s.isCameraMoved);
   const resetCamera = useUIStore((s) => s.resetCamera);
 
-  // Show when zoomed in via pinch/wheel or when a node/cluster is selected
-  if (!selectedNodeId && !selectedClusterId && !isZoomedIn) return null;
+  if (!isCameraMoved) return null;
 
   return (
     <button

@@ -206,6 +206,55 @@ export function createDustNode(score: number, color: string): THREE.Group {
   return group;
 }
 
+/* ── Cluster label node (3D clickable label at cluster centroid) ── */
+
+export function createClusterLabelNode(
+  name: string,
+  color: string,
+): THREE.Group {
+  const group = new THREE.Group();
+
+  // Nebula glow
+  const glowCanvas = new OffscreenCanvas(128, 128);
+  const glowCtx = glowCanvas.getContext("2d")!;
+  const gradient = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, color + "30");
+  gradient.addColorStop(0.5, color + "10");
+  gradient.addColorStop(1, "transparent");
+  glowCtx.fillStyle = gradient;
+  glowCtx.fillRect(0, 0, 128, 128);
+  const glowTex = new THREE.CanvasTexture(glowCanvas);
+  const glowMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.set(60, 60, 1);
+  group.add(glow);
+
+  // Label
+  const labelCanvas = new OffscreenCanvas(512, 128);
+  const ctx = labelCanvas.getContext("2d")!;
+  ctx.font = "bold 48px monospace";
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7;
+  ctx.textAlign = "center";
+  ctx.fillText(name.slice(0, 24), 256, 72);
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const labelMat = new THREE.SpriteMaterial({
+    map: labelTex,
+    transparent: true,
+    depthWrite: false,
+  });
+  const label = new THREE.Sprite(labelMat);
+  label.scale.set(50, 12.5, 1);
+  group.add(label);
+
+  return group;
+}
+
 /* ── Starfield background ── */
 
 export function createStarField(count: number, spread: number): THREE.Points {

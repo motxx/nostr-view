@@ -62,6 +62,18 @@ export async function fetchProfiles(
   return results;
 }
 
+export async function fetchUserNotes(
+  pubkey: string,
+  limit: number = 50,
+): Promise<NostrEvent[]> {
+  const filter: Filter = {
+    kinds: [NOSTR_KIND.TEXT_NOTE],
+    authors: [pubkey],
+    limit,
+  };
+  return queryEvents([filter]);
+}
+
 export function subscribeLiveNotes(
   onEvent: (event: NostrEvent) => void,
   onEose?: () => void,

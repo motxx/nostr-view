@@ -8,16 +8,19 @@ interface UIStore {
 
   /** Registered by UniverseGraph — resets camera to overview position */
   resetCameraFn: (() => void) | null;
+  /** Registered by UniverseGraph — flies camera to cluster centroid */
+  flyToClusterFn: ((clusterId: string) => void) | null;
 
-  /** True when the camera is zoomed in past the default overview distance */
-  isZoomedIn: boolean;
+  /** True when camera has moved from the default overview position */
+  isCameraMoved: boolean;
 
   selectCluster: (clusterId: string | null) => void;
   selectNode: (nodeId: string | null) => void;
   setTimelinePanelOpen: (open: boolean) => void;
   setHoveredNode: (nodeId: string | null) => void;
   setResetCameraFn: (fn: (() => void) | null) => void;
-  setZoomedIn: (zoomed: boolean) => void;
+  setFlyToClusterFn: (fn: ((clusterId: string) => void) | null) => void;
+  setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
 }
 
@@ -27,7 +30,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   isTimelinePanelOpen: false,
   hoveredNodeId: null,
   resetCameraFn: null,
-  isZoomedIn: false,
+  flyToClusterFn: null,
+  isCameraMoved: false,
 
   selectCluster: (clusterId) =>
     set({
@@ -50,9 +54,10 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setHoveredNode: (nodeId) => set({ hoveredNodeId: nodeId }),
 
   setResetCameraFn: (fn) => set({ resetCameraFn: fn }),
+  setFlyToClusterFn: (fn) => set({ flyToClusterFn: fn }),
 
-  setZoomedIn: (zoomed) => {
-    if (get().isZoomedIn !== zoomed) set({ isZoomedIn: zoomed });
+  setCameraMoved: (moved) => {
+    if (get().isCameraMoved !== moved) set({ isCameraMoved: moved });
   },
 
   resetCamera: () => {
@@ -62,7 +67,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
       selectedClusterId: null,
       selectedNodeId: null,
       isTimelinePanelOpen: false,
-      isZoomedIn: false,
+      isCameraMoved: false,
     });
   },
 }));

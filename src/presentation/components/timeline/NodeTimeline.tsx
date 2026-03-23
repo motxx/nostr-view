@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useEventStore } from "@/store/event-store";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { primalProfileUrl } from "@/lib/nostr-url";
+import { fetchUserNotes } from "@/infra/nostr/event-fetcher";
 import { NoteCard } from "./NoteCard";
 
 interface NodeTimelineProps {
@@ -13,6 +15,17 @@ interface NodeTimelineProps {
 export function NodeTimeline({ pubkey }: NodeTimelineProps) {
   const eventsByAuthor = useEventStore((s) => s.eventsByAuthor);
   const profiles = useEventStore((s) => s.profiles);
+
+  // Fetch this user's notes on demand via TanStack Query
+  const { isFetching } = useQuery({
+    queryKey: ["nostr", "user-notes", pubkey],
+    queryFn: async () => {
+      const notes = await fetchUserNotes(pubkey, 50);
+      useEventStore.getState().addEvents(notes);
+      return notes.length;
+    },
+    staleTime: 60_000,
+  });
 
   const profile = profiles.get(pubkey);
   const displayName =
@@ -55,14 +68,14 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
           </div>
         </div>
         <p className="font-mono text-xs text-white/40 mt-1">
-          {notes.length} notes
+          {isFetching ? "Loading..." : `${notes.length} notes`}
         </p>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {notes.map((event) => (
           <NoteCard key={event.id} event={event} profile={profile} />
         ))}
-        {notes.length === 0 && (
+        {notes.length === 0 && !isFetching && (
           <p className="font-mono text-sm text-white/30 text-center py-8">
             No notes yet
           </p>

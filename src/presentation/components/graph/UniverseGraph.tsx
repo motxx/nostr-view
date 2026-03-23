@@ -26,6 +26,7 @@ import {
   createStarNode,
   createPlanetNode,
   createDustNode,
+  createClusterLabelNode,
   assignTiers,
   pulsePeriod,
   type NodeTier,
@@ -84,6 +85,7 @@ interface NodeExtra {
   clusterId?: string;
   clusterColor?: string;
   tier: NodeTier;
+  isClusterNode?: boolean;
 }
 
 interface LinkExtra {
@@ -193,6 +195,39 @@ function UniverseGraphInner() {
       return node;
     });
 
+    // Add cluster centroid nodes — positioned at the average of member positions.
+    // Fixed via fx/fy/fz so they don't affect the force simulation.
+    for (const cluster of clusters) {
+      let x = 0,
+        y = 0,
+        z = 0,
+        count = 0;
+      for (const pk of cluster.memberPubkeys) {
+        const member = prevMap.get(pk);
+        if (member?.x !== undefined) {
+          x += member.x;
+          y += member.y ?? 0;
+          z += member.z ?? 0;
+          count++;
+        }
+      }
+      if (count > 0) {
+        const prev = prevMap.get(`cluster:${cluster.id}`);
+        graphNodes.push({
+          id: `cluster:${cluster.id}`,
+          name: `#${cluster.label}`,
+          influenceScore: 0,
+          clusterId: cluster.id,
+          clusterColor: cluster.color,
+          tier: "dust",
+          isClusterNode: true,
+          fx: prev?.fx ?? x / count,
+          fy: prev?.fy ?? (y / count) - 20,
+          fz: prev?.fz ?? z / count,
+        } as GNode);
+      }
+    }
+
     const newMap = new Map<string, GNode>();
     for (const n of graphNodes) newMap.set(n.id as string, n);
     prevNodesRef.current = newMap;
@@ -237,11 +272,48 @@ function UniverseGraphInner() {
         1500,
       );
     });
+
+    // Register fly-to-cluster callback
+    useUIStore.getState().setFlyToClusterFn((clusterId: string) => {
+      const cluster = useGraphStore
+        .getState()
+        .clusters.find((c) => c.id === clusterId);
+      if (!cluster) return;
+      let x = 0,
+        y = 0,
+        z = 0,
+        count = 0;
+      for (const [, gnode] of prevNodesRef.current) {
+        if (cluster.memberPubkeys.has(gnode.id as string)) {
+          x += gnode.x ?? 0;
+          y += gnode.y ?? 0;
+          z += gnode.z ?? 0;
+          count++;
+        }
+      }
+      if (count === 0) return;
+      x /= count;
+      y /= count;
+      z /= count;
+      fg.cameraPosition(
+        { x: x + 150, y: y + 50, z: z + 150 },
+        { x, y, z },
+        1500,
+      );
+    });
   }, []);
 
   // Pulse animation is driven by Three.js's own render loop via onBeforeRender
   // on each glow sprite. No separate rAF / useEffect needed.
   const nodeThreeObject = useCallback((node: GNode) => {
+    // Cluster centroid labels
+    if (node.isClusterNode) {
+      return createClusterLabelNode(
+        node.name ?? "",
+        node.clusterColor ?? "#ffffff",
+      );
+    }
+
     const score = node.influenceScore ?? 0;
     const color = influenceToColor(score, node.clusterColor);
     const tier = node.tier ?? "dust";
@@ -283,8 +355,17 @@ function UniverseGraphInner() {
   }, []);
 
   const handleNodeClick = useCallback((node: GNode) => {
-    useUIStore.getState().selectNode(node.id as string);
+    const id = node.id as string;
 
+    if (node.isClusterNode && node.clusterId) {
+      // Cluster label clicked → select cluster + open timeline
+      useUIStore.getState().selectCluster(node.clusterId);
+    } else {
+      // Normal node → select node + open timeline
+      useUIStore.getState().selectNode(id);
+    }
+
+    // Fly camera to clicked node
     const fg = graphRef.current;
     if (
       fg &&
@@ -292,7 +373,7 @@ function UniverseGraphInner() {
       node.y !== undefined &&
       node.z !== undefined
     ) {
-      const distance = 100;
+      const distance = node.isClusterNode ? 200 : 100;
       const distRatio =
         1 + distance / Math.hypot(node.x, node.y, node.z || 1);
       fg.cameraPosition(
@@ -326,7 +407,8 @@ function UniverseGraphInner() {
   const lastCameraCheckRef = useRef(0);
 
   const linkColor = useCallback((edge: GLink) => {
-    // Camera distance check — throttled, piggybacks on the graph's render loop
+    // Camera movement check — throttled, piggybacks on the graph's render loop.
+    // Shows Overview button whenever camera has moved from default position.
     const now = Date.now();
     if (now - lastCameraCheckRef.current > 200) {
       lastCameraCheckRef.current = now;
@@ -334,9 +416,12 @@ function UniverseGraphInner() {
       if (fg) {
         const camera = fg.camera();
         if (camera) {
-          useUIStore
-            .getState()
-            .setZoomedIn(camera.position.length() < OVERVIEW_DISTANCE);
+          const p = camera.position;
+          const moved =
+            Math.abs(p.x) > 10 ||
+            Math.abs(p.y) > 10 ||
+            Math.abs(p.z - 500) > 30;
+          useUIStore.getState().setCameraMoved(moved);
         }
       }
     }
@@ -395,7 +480,7 @@ function UniverseGraphInner() {
   // ── Render (declarative — cursor via className, not DOM manipulation) ──
 
   return (
-    <div className={`w-full h-full ${isHovering ? "cursor-pointer" : ""}`}>
+    <div className={`relative w-full h-full z-0 ${isHovering ? "cursor-pointer" : ""}`}>
       <ForceGraph3D
         ref={graphRef}
         graphData={graphData}

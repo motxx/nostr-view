@@ -9,7 +9,8 @@ describe("ui-store", () => {
       isTimelinePanelOpen: false,
       hoveredNodeId: null,
       resetCameraFn: null,
-      isZoomedIn: false,
+      flyToClusterFn: null,
+      isCameraMoved: false,
     });
   });
 
@@ -54,16 +55,16 @@ describe("ui-store", () => {
       expect(fn).toHaveBeenCalledOnce();
     });
 
-    it("clears selection and zoom state", () => {
+    it("clears selection and camera state", () => {
       useUIStore.getState().selectNode("alice");
-      useUIStore.getState().setZoomedIn(true);
+      useUIStore.getState().setCameraMoved(true);
       useUIStore.getState().setResetCameraFn(() => {});
       useUIStore.getState().resetCamera();
       const s = useUIStore.getState();
       expect(s.selectedNodeId).toBeNull();
       expect(s.selectedClusterId).toBeNull();
       expect(s.isTimelinePanelOpen).toBe(false);
-      expect(s.isZoomedIn).toBe(false);
+      expect(s.isCameraMoved).toBe(false);
     });
 
     it("does not throw when no resetCameraFn registered", () => {
@@ -71,16 +72,25 @@ describe("ui-store", () => {
     });
   });
 
-  describe("setZoomedIn", () => {
-    it("sets isZoomedIn to true", () => {
-      useUIStore.getState().setZoomedIn(true);
-      expect(useUIStore.getState().isZoomedIn).toBe(true);
+  describe("setCameraMoved", () => {
+    it("sets isCameraMoved to true", () => {
+      useUIStore.getState().setCameraMoved(true);
+      expect(useUIStore.getState().isCameraMoved).toBe(true);
     });
 
-    it("sets isZoomedIn back to false", () => {
-      useUIStore.getState().setZoomedIn(true);
-      useUIStore.getState().setZoomedIn(false);
-      expect(useUIStore.getState().isZoomedIn).toBe(false);
+    it("sets isCameraMoved back to false", () => {
+      useUIStore.getState().setCameraMoved(true);
+      useUIStore.getState().setCameraMoved(false);
+      expect(useUIStore.getState().isCameraMoved).toBe(false);
+    });
+  });
+
+  describe("flyToClusterFn", () => {
+    it("registers and calls flyToClusterFn", () => {
+      const fn = vi.fn();
+      useUIStore.getState().setFlyToClusterFn(fn);
+      useUIStore.getState().flyToClusterFn?.("c1");
+      expect(fn).toHaveBeenCalledWith("c1");
     });
   });
 });

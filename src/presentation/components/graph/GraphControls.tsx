@@ -12,6 +12,7 @@ export function GraphControls() {
   const clusters = useGraphStore((s) => s.clusters);
   const selectedClusterId = useUIStore((s) => s.selectedClusterId);
   const selectCluster = useUIStore((s) => s.selectCluster);
+  const flyToClusterFn = useUIStore((s) => s.flyToClusterFn);
   const lastPostTime = useActivityStore((s) => s.lastPostTime);
   const eventsByKind = useEventStore((s) => s.eventsByKind);
 
@@ -71,9 +72,14 @@ export function GraphControls() {
                     ? `0 0 12px ${cluster.color}40`
                     : "none",
                 }}
-                onClick={() =>
-                  selectCluster(isSelected ? null : cluster.id)
-                }
+                onClick={() => {
+                  if (isSelected) {
+                    selectCluster(null);
+                  } else {
+                    selectCluster(cluster.id);
+                    flyToClusterFn?.(cluster.id);
+                  }
+                }}
               >
                 <div
                   className="w-2 h-2 rounded-full shrink-0"
