@@ -10,13 +10,16 @@ import {
   fetchProfiles,
   subscribeLiveNotes,
 } from "@/infra/nostr/event-fetcher";
+import { closePool } from "@/infra/nostr/relay-pool-impl";
 import { subscriptionManager } from "@/infra/nostr/subscription-manager";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
 /**
  * Fetches initial Nostr events and profiles via TanStack Query.
- * The only useEffect is for the live WebSocket subscription
- * (external system sync — the one valid use-case).
+ *
+ * The single useEffect is for the live WebSocket subscription — the
+ * canonical external-system-sync use-case that Dan Abramov endorses.
+ * Relay pool cleanup is co-located here (same external system lifecycle).
  */
 export function useNostrEvents() {
   // ── Initial event fetch ──
@@ -41,7 +44,6 @@ export function useNostrEvents() {
         .getState()
         .setConnectionStatus(allEvents.length > 0 ? "connected" : "error");
 
-      // Feed activity store
       const activities = allEvents
         .filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE)
         .map((e) => ({ pubkey: e.pubkey, createdAt: e.created_at }));
@@ -49,10 +51,11 @@ export function useNostrEvents() {
         useActivityStore.getState().updateActivities(activities);
       }
 
-      // Return pubkeys for dependent profile query
       return [
         ...new Set(
-          allEvents.filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE).map((e) => e.pubkey),
+          allEvents
+            .filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE)
+            .map((e) => e.pubkey),
         ),
       ].slice(0, 200);
     },
@@ -71,7 +74,10 @@ export function useNostrEvents() {
     staleTime: Infinity,
   });
 
-  // ── Live subscription — external system sync (WebSocket) ──
+  // ── Live subscription + relay pool lifecycle ──
+  // This is the ONE useEffect in the entire app. It synchronizes with
+  // an external system (WebSocket relay connection). Per Dan Abramov:
+  // "Effects let you synchronize your component with an external system."
   useEffect(() => {
     const sub = subscribeLiveNotes(
       (event) => {
@@ -85,6 +91,10 @@ export function useNostrEvents() {
       () => useEventStore.getState().setConnectionStatus("connected"),
     );
     subscriptionManager.add("live-notes", sub);
-    return () => subscriptionManager.close("live-notes");
+
+    return () => {
+      subscriptionManager.closeAll();
+      closePool();
+    };
   }, []);
 }

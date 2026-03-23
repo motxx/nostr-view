@@ -32,9 +32,7 @@ export function assignTiers(
 /* ── Glow sprite helper ── */
 
 export function createGlowSprite(color: string, size: number): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
+  const canvas = new OffscreenCanvas(128, 128);
   const ctx = canvas.getContext("2d")!;
 
   const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -73,9 +71,7 @@ function createLabelSprite(
   size: number,
   alpha: number,
 ): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 64;
+  const canvas = new OffscreenCanvas(256, 64);
   const ctx = canvas.getContext("2d")!;
   ctx.font = "24px monospace";
   ctx.fillStyle = `rgba(255,255,255,${alpha})`;

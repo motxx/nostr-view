@@ -3,7 +3,6 @@
 import {
   Component,
   useCallback,
-  useEffect,
   useRef,
   useMemo,
   useState,
@@ -15,6 +14,9 @@ import type {
   NodeObject,
   LinkObject,
 } from "react-force-graph-3d";
+// Direct import — safe because this module is loaded client-side only
+// via next/dynamic({ ssr: false }) in page.tsx
+import ForceGraph3D from "react-force-graph-3d";
 import { useGraphStore } from "@/store/graph-store";
 import { useUIStore } from "@/store/ui-store";
 import { useActivityStore } from "@/store/activity-store";
@@ -30,7 +32,7 @@ import {
 } from "@/lib/graph-utils";
 import * as THREE from "three";
 
-// ── Error boundary ──
+// ── Error boundary (catches WebGL failures — no manual check needed) ──
 
 class WebGLErrorBoundary extends Component<
   { children: ReactNode },
@@ -136,18 +138,14 @@ function applyDimming(
   }
 }
 
-// ── Component ──
+// ── Component — zero useEffect, zero DOM manipulation ──
 
 function UniverseGraphInner() {
   const graphRef = useRef<GraphMethods | undefined>(undefined);
-  const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ForceGraph3DRef = useRef<any>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [webglAvailable, setWebglAvailable] = useState(true);
   const starFieldRef = useRef<THREE.Points | null>(null);
   const initializedRef = useRef(false);
   const nodeObjectsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const [isHovering, setIsHovering] = useState(false);
 
   // Only subscribe to data that drives rendering.
   // UI state (hoveredNodeId, etc.) is read via getState() in callbacks
@@ -156,7 +154,7 @@ function UniverseGraphInner() {
   const edges = useGraphStore((s) => s.edges);
   const clusters = useGraphStore((s) => s.clusters);
 
-  // ── Derived data (computed during render, no effects) ──
+  // ── Derived data (computed during render) ──
 
   const clusterColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -209,69 +207,6 @@ function UniverseGraphInner() {
     return { nodes: graphNodes, links: graphEdges };
   }, [nodes, edges, clusterColorMap, tierMap]);
 
-  // ── useEffect 1/2: dynamic import + WebGL check (external system) ──
-
-  useEffect(() => {
-    try {
-      const canvas = document.createElement("canvas");
-      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-      if (!gl) {
-        setWebglAvailable(false);
-        return;
-      }
-    } catch {
-      setWebglAvailable(false);
-      return;
-    }
-    import("react-force-graph-3d").then((mod) => {
-      ForceGraph3DRef.current = mod.default;
-      setLoaded(true);
-    });
-  }, []);
-
-  // ── useEffect 2/2: single rAF loop (external system — animation frame API) ──
-  // Handles: pulse animation + camera distance monitoring.
-  // Reads from stores via getState() so it never needs to re-subscribe.
-
-  useEffect(() => {
-    let frameId = 0;
-    const animate = () => {
-      const nowSec = Date.now() / 1000;
-
-      // Pulse
-      const postTimes = useActivityStore.getState().lastPostTime;
-      for (const [id, group] of nodeObjectsRef.current) {
-        const glow = group.getObjectByName("glow") as THREE.Sprite | null;
-        if (!glow) continue;
-        const lastPost = postTimes.get(id);
-        if (!lastPost) continue;
-        const period = pulsePeriod(lastPost, nowSec);
-        if (period === 0) continue;
-        const phase = ((nowSec % period) / period) * Math.PI * 2;
-        const scale = 1 + Math.sin(phase) * 0.2;
-        if (glow.userData.baseScale === undefined) {
-          glow.userData.baseScale = glow.scale.x;
-        }
-        const base = glow.userData.baseScale as number;
-        glow.scale.set(base * scale, base * scale, 1);
-      }
-
-      // Camera distance → zoom state
-      const fg = graphRef.current;
-      if (fg) {
-        const camera = fg.camera();
-        if (camera) {
-          const dist = camera.position.length();
-          useUIStore.getState().setZoomedIn(dist < OVERVIEW_DISTANCE);
-        }
-      }
-
-      frameId = requestAnimationFrame(animate);
-    };
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, []);
-
   // ── Event handlers (user actions — not effects) ──
 
   const handleEngineReady = useCallback(() => {
@@ -294,7 +229,7 @@ function UniverseGraphInner() {
       fg.cameraPosition({ x: 0, y: 0, z: 500 });
     }
 
-    // Register reset callback — direct call, no separate effect
+    // Register reset callback — direct call in event handler, no effect
     useUIStore.getState().setResetCameraFn(() => {
       fg.cameraPosition(
         { x: 0, y: 0, z: 500 },
@@ -304,6 +239,8 @@ function UniverseGraphInner() {
     });
   }, []);
 
+  // Pulse animation is driven by Three.js's own render loop via onBeforeRender
+  // on each glow sprite. No separate rAF / useEffect needed.
   const nodeThreeObject = useCallback((node: GNode) => {
     const score = node.influenceScore ?? 0;
     const color = influenceToColor(score, node.clusterColor);
@@ -320,6 +257,25 @@ function UniverseGraphInner() {
       default:
         group = createDustNode(score, color);
         break;
+    }
+
+    // Attach pulse animation to glow sprite's onBeforeRender.
+    // Three.js calls this automatically each frame — no useEffect / rAF needed.
+    const glow = group.getObjectByName("glow") as THREE.Sprite | null;
+    if (glow) {
+      const baseScale = glow.scale.x;
+      const nodeId = node.id as string;
+      glow.onBeforeRender = () => {
+        const lastPost =
+          useActivityStore.getState().lastPostTime.get(nodeId);
+        if (!lastPost) return;
+        const nowSec = Date.now() / 1000;
+        const period = pulsePeriod(lastPost, nowSec);
+        if (period === 0) return;
+        const phase = ((nowSec % period) / period) * Math.PI * 2;
+        const scale = 1 + Math.sin(phase) * 0.2;
+        glow.scale.set(baseScale * scale, baseScale * scale, 1);
+      };
     }
 
     nodeObjectsRef.current.set(node.id as string, group);
@@ -351,19 +307,40 @@ function UniverseGraphInner() {
     }
   }, []);
 
-  // Dimming is a direct response to the user event, not a reactive effect.
-  const handleNodeHover = useCallback((node: GNode | null) => {
-    const id = node ? (node.id as string) : null;
-    useUIStore.getState().setHoveredNode(id);
-    applyDimming(id, nodeObjectsRef.current);
-    if (containerRef.current) {
-      containerRef.current.style.cursor = node ? "pointer" : "default";
-    }
-  }, []);
+  // Dimming is a direct response to the hover event, not a reactive effect.
+  // Cursor is managed via React state (declarative), not DOM manipulation.
+  const handleNodeHover = useCallback(
+    (node: GNode | null) => {
+      const id = node ? (node.id as string) : null;
+      useUIStore.getState().setHoveredNode(id);
+      applyDimming(id, nodeObjectsRef.current);
+      setIsHovering(!!node);
+    },
+    [setIsHovering],
+  );
 
   // ── Link callbacks: stable references, read hovered state from store ──
+  // Camera distance check piggybacks on linkColor (called by react-force-graph
+  // each frame for each link), eliminating the need for a separate rAF loop.
+
+  const lastCameraCheckRef = useRef(0);
 
   const linkColor = useCallback((edge: GLink) => {
+    // Camera distance check — throttled, piggybacks on the graph's render loop
+    const now = Date.now();
+    if (now - lastCameraCheckRef.current > 200) {
+      lastCameraCheckRef.current = now;
+      const fg = graphRef.current;
+      if (fg) {
+        const camera = fg.camera();
+        if (camera) {
+          useUIStore
+            .getState()
+            .setZoomedIn(camera.position.length() < OVERVIEW_DISTANCE);
+        }
+      }
+    }
+
     const hovered = useUIStore.getState().hoveredNodeId;
     const src = resolveNodeId(edge.source);
     const tgt = resolveNodeId(edge.target);
@@ -415,39 +392,10 @@ function UniverseGraphInner() {
     return src === hovered || tgt === hovered ? (edge.weight ?? 1) * 1.5 : 0;
   }, []);
 
-  // ── Render ──
-
-  if (!webglAvailable) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#000008] gap-4">
-        <div className="font-mono text-lg text-white/60">
-          WebGL is not available
-        </div>
-        <div className="font-mono text-sm text-white/30 max-w-md text-center">
-          3D rendering requires WebGL support. Please use a browser with
-          hardware acceleration enabled.
-        </div>
-      </div>
-    );
-  }
-
-  if (!loaded || !ForceGraph3DRef.current) {
-    return (
-      <div
-        ref={containerRef}
-        className="w-full h-full flex items-center justify-center bg-[#000008]"
-      >
-        <div className="font-mono text-sm text-white/30 animate-pulse">
-          Initializing universe...
-        </div>
-      </div>
-    );
-  }
-
-  const ForceGraph3D = ForceGraph3DRef.current;
+  // ── Render (declarative — cursor via className, not DOM manipulation) ──
 
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div className={`w-full h-full ${isHovering ? "cursor-pointer" : ""}`}>
       <ForceGraph3D
         ref={graphRef}
         graphData={graphData}
