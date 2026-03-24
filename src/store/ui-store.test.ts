@@ -10,6 +10,7 @@ describe("ui-store", () => {
       hoveredNodeId: null,
       resetCameraFn: null,
       flyToClusterFn: null,
+      reheatSimulationFn: null,
       isCameraMoved: false,
     });
   });
@@ -91,6 +92,19 @@ describe("ui-store", () => {
       useUIStore.getState().setFlyToClusterFn(fn);
       useUIStore.getState().flyToClusterFn?.("c1");
       expect(fn).toHaveBeenCalledWith("c1");
+    });
+  });
+
+  describe("reheatSimulation", () => {
+    it("calls registered reheatSimulationFn", () => {
+      const fn = vi.fn();
+      useUIStore.getState().setReheatSimulationFn(fn);
+      useUIStore.getState().reheatSimulation();
+      expect(fn).toHaveBeenCalledOnce();
+    });
+
+    it("does not throw when no fn registered", () => {
+      expect(() => useUIStore.getState().reheatSimulation()).not.toThrow();
     });
   });
 });

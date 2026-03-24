@@ -55,7 +55,10 @@ export function GraphControls() {
           {STRATEGIES.map((s) => (
             <button
               key={s}
-              onClick={() => setClusterStrategy(s)}
+              onClick={() => {
+                setClusterStrategy(s);
+                useUIStore.getState().reheatSimulation();
+              }}
               className={`flex-1 font-mono text-[11px] px-2 py-1 rounded transition-colors ${
                 clusterStrategy === s
                   ? "bg-white/15 text-white"

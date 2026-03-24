@@ -12,6 +12,8 @@ interface UIStore {
   resetCameraFn: (() => void) | null;
   /** Registered by UniverseGraph — flies camera to cluster centroid */
   flyToClusterFn: ((clusterId: string) => void) | null;
+  /** Registered by UniverseGraph — reheats the force simulation */
+  reheatSimulationFn: (() => void) | null;
 
   /** True when camera has moved from the default overview position */
   isCameraMoved: boolean;
@@ -22,6 +24,8 @@ interface UIStore {
   setHoveredNode: (nodeId: string | null) => void;
   setResetCameraFn: (fn: (() => void) | null) => void;
   setFlyToClusterFn: (fn: ((clusterId: string) => void) | null) => void;
+  setReheatSimulationFn: (fn: (() => void) | null) => void;
+  reheatSimulation: () => void;
   setClusterStrategy: (strategy: ClusterStrategy) => void;
   setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
@@ -35,6 +39,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredNodeId: null,
   resetCameraFn: null,
   flyToClusterFn: null,
+  reheatSimulationFn: null,
   isCameraMoved: false,
 
   selectCluster: (clusterId) =>
@@ -59,6 +64,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   setResetCameraFn: (fn) => set({ resetCameraFn: fn }),
   setFlyToClusterFn: (fn) => set({ flyToClusterFn: fn }),
+  setReheatSimulationFn: (fn) => set({ reheatSimulationFn: fn }),
+  reheatSimulation: () => get().reheatSimulationFn?.(),
 
   setClusterStrategy: (strategy) =>
     set({
