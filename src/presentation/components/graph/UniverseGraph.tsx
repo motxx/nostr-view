@@ -298,50 +298,82 @@ function GraphNode({
   );
 }
 
-// ── Link rendering (single draw call for all edges) ──
+// ── Link rendering ──
+// Edges are invisible by default. When a node is selected or hovered,
+// only its connected edges light up. Uses per-vertex color to control
+// visibility in a single draw call.
 
 function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }) {
   const lineRef = useRef<THREE.LineSegments>(null);
 
+  const maxLinks = 2000;
+  const positions = useMemo(() => new Float32Array(maxLinks * 6), []);
+  const colors = useMemo(() => new Float32Array(maxLinks * 6), []); // rgb per vertex
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return g;
+  }, [positions, colors]);
+
   useFrame(() => {
     const s = simState.current;
     if (!s || !lineRef.current) return;
-    const geom = lineRef.current.geometry;
+
     const posAttr = geom.getAttribute("position") as THREE.BufferAttribute;
-    const positions = posAttr.array as Float32Array;
+    const colorAttr = geom.getAttribute("color") as THREE.BufferAttribute;
+    const pos = posAttr.array as Float32Array;
+    const col = colorAttr.array as Float32Array;
+
+    // Determine which node is active (selected or hovered)
+    const ui = useUIStore.getState();
+    const activeId = ui.selectedNodeId ?? ui.hoveredNodeId;
+    const connected = activeId ? buildConnectedSet(activeId) : null;
 
     for (let i = 0; i < s.links.length; i++) {
       const link = s.links[i];
       const src = typeof link.source === "object" ? link.source : s.nodeMap.get(String(link.source));
       const tgt = typeof link.target === "object" ? link.target : s.nodeMap.get(String(link.target));
-      if (src && tgt) {
-        positions[i * 6] = src.x ?? 0;
-        positions[i * 6 + 1] = src.y ?? 0;
-        positions[i * 6 + 2] = src.z ?? 0;
-        positions[i * 6 + 3] = tgt.x ?? 0;
-        positions[i * 6 + 4] = tgt.y ?? 0;
-        positions[i * 6 + 5] = tgt.z ?? 0;
-      }
+      if (!src || !tgt) continue;
+
+      // Position
+      pos[i * 6] = src.x ?? 0;
+      pos[i * 6 + 1] = src.y ?? 0;
+      pos[i * 6 + 2] = src.z ?? 0;
+      pos[i * 6 + 3] = tgt.x ?? 0;
+      pos[i * 6 + 4] = tgt.y ?? 0;
+      pos[i * 6 + 5] = tgt.z ?? 0;
+
+      // Color: bright if connected to active node, invisible otherwise
+      const srcId = String(src.id);
+      const tgtId = String(tgt.id);
+      const isActive =
+        connected &&
+        (srcId === activeId || tgtId === activeId) &&
+        connected.has(srcId) &&
+        connected.has(tgtId);
+
+      const r = isActive ? 0.5 : 0;
+      const g = isActive ? 0.7 : 0;
+      const b = isActive ? 1.0 : 0;
+
+      col[i * 6] = r;     col[i * 6 + 1] = g;     col[i * 6 + 2] = b;
+      col[i * 6 + 3] = r; col[i * 6 + 4] = g; col[i * 6 + 5] = b;
     }
+
     posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+    geom.setDrawRange(0, s.links.length * 2);
   });
-
-  const maxLinks = 2000;
-  const positions = useMemo(() => new Float32Array(maxLinks * 6), []);
-  const geom = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    return g;
-  }, [positions]);
-
-  // Update draw range when link count changes
-  useMemo(() => {
-    geom.setDrawRange(0, (simState.current?.links.length ?? 0) * 2);
-  }, [geom, simState.current?.links.length]);
 
   return (
     <lineSegments ref={lineRef} geometry={geom}>
-      <lineBasicMaterial color="#ffffff" transparent opacity={0.03} blending={THREE.AdditiveBlending} />
+      <lineBasicMaterial
+        vertexColors
+        transparent
+        opacity={0.8}
+        blending={THREE.AdditiveBlending}
+      />
     </lineSegments>
   );
 }
