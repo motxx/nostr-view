@@ -190,6 +190,9 @@ function UniverseGraphInner() {
 
   const tierMap = useMemo(() => assignTiers(nodes), [nodes]);
 
+  // Track cluster nebulae as scene objects (not graph nodes — no links needed)
+  const clusterNebulaeRef = useRef<Map<string, THREE.Group>>(new Map());
+
   const graphData = useMemo(() => {
     const prevMap = prevNodesRef.current;
 
@@ -211,44 +214,15 @@ function UniverseGraphInner() {
       return node;
     });
 
-    // Add cluster centroid nodes + invisible links to members.
-    // Force-graph's simulation naturally positions them at the cluster centroid.
-    const clusterLinks: GLink[] = [];
-    for (const cluster of clusters) {
-      const cid = `cluster:${cluster.id}`;
-      graphNodes.push({
-        id: cid,
-        name: `#${cluster.label}`,
-        influenceScore: 0,
-        clusterId: cluster.id,
-        clusterColor: cluster.color,
-        tier: "dust",
-        isClusterNode: true,
-        memberCount: cluster.memberPubkeys.size,
-      } as GNode);
-      // Invisible links pull the centroid node toward its members
-      for (const pk of cluster.memberPubkeys) {
-        clusterLinks.push({
-          source: cid,
-          target: pk,
-          type: "cluster",
-          weight: 0,
-        } as GLink);
-      }
-    }
-
     const newMap = new Map<string, GNode>();
     for (const n of graphNodes) newMap.set(n.id as string, n);
     prevNodesRef.current = newMap;
 
     return {
       nodes: graphNodes,
-      links: [
-        ...edges.map((e) => ({
-          source: e.source, target: e.target, type: e.type, weight: e.weight,
-        })),
-        ...clusterLinks,
-      ],
+      links: edges.map((e) => ({
+        source: e.source, target: e.target, type: e.type, weight: e.weight,
+      })),
     };
   }, [nodes, edges, clusterColorMap, tierMap, clusters]);
 
@@ -305,12 +279,6 @@ function UniverseGraphInner() {
   }, []);
 
   const nodeThreeObject = useCallback((node: GNode) => {
-    if (node.isClusterNode) {
-      return createClusterLabelNode(
-        node.name ?? "", node.clusterColor ?? "#fff", node.memberCount ?? 10,
-      );
-    }
-
     const score = node.influenceScore ?? 0;
     const color = influenceToColor(score, node.clusterColor);
     let group: THREE.Group;
@@ -365,21 +333,53 @@ function UniverseGraphInner() {
   const lastCameraCheckRef = useRef(0);
 
   const linkColor = useCallback((edge: GLink) => {
-    // Throttled camera check — only after initial layout settles
+    // Throttled per-frame tasks — piggybacks on the graph's link iteration
     const now = Date.now();
     if (initializedRef.current && now - lastCameraCheckRef.current > 300) {
       lastCameraCheckRef.current = now;
-      const cam = graphRef.current?.camera();
+
+      const fg = graphRef.current;
+      // Camera check
+      const cam = fg?.camera();
       if (cam) {
         const p = cam.position;
         useUIStore.getState().setCameraMoved(
           Math.abs(p.x) > 30 || Math.abs(p.y) > 30 || Math.abs(p.z - 500) > 50,
         );
       }
-    }
 
-    // Cluster links are invisible (only provide force)
-    if (edge.type === "cluster") return "rgba(0,0,0,0)";
+      // Sync cluster nebulae positions + add/remove as needed
+      if (fg) {
+        const scene = fg.scene();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const liveNodes = ((fg as any).graphData?.()?.nodes ?? []) as GNode[];
+        const currentClusters = useGraphStore.getState().clusters;
+
+        // Remove stale
+        for (const [id, obj] of clusterNebulaeRef.current) {
+          if (!currentClusters.some((c) => c.id === id)) {
+            scene?.remove(obj);
+            clusterNebulaeRef.current.delete(id);
+          }
+        }
+
+        // Add new + update positions
+        for (const cluster of currentClusters) {
+          let nebula = clusterNebulaeRef.current.get(cluster.id);
+          if (!nebula && scene) {
+            nebula = createClusterLabelNode(
+              `#${cluster.label}`, cluster.color, cluster.memberPubkeys.size,
+            );
+            scene.add(nebula);
+            clusterNebulaeRef.current.set(cluster.id, nebula);
+          }
+          if (nebula) {
+            const c = computeClusterCentroid(cluster.id, liveNodes);
+            if (c) nebula.position.set(c.x, c.y - 15, c.z);
+          }
+        }
+      }
+    }
 
     const hovered = useUIStore.getState().hoveredNodeId;
     const src = resolveNodeId(edge.source);
@@ -433,7 +433,7 @@ function UniverseGraphInner() {
         nodeThreeObject={nodeThreeObject}
         nodeThreeObjectExtend={false}
         linkColor={linkColor}
-        linkWidth={(e: GLink) => e.type === "cluster" ? 0 : (e.weight ?? 1) * 0.3}
+        linkWidth={(e: GLink) => (e.weight ?? 1) * 0.3}
         linkOpacity={0.3}
         linkDirectionalParticles={linkParticles}
         linkDirectionalParticleWidth={linkParticleWidth}
