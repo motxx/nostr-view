@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { findRepresentativeNotes, computeBridges } from "./cluster-summary";
+import {
+  findRepresentativeNotes,
+  computeBridges,
+  findUserCluster,
+  clusterConnectivity,
+} from "./cluster-summary";
 import type { Cluster } from "@/domain/entities/cluster";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
@@ -88,8 +93,41 @@ describe("computeBridges", () => {
       },
     ];
     const bridges = computeBridges(clusters);
-    expect(bridges.get("c1")?.get("c2")).toBe(2); // bob, carol
-    expect(bridges.get("c1")?.has("c3")).toBe(false); // no shared
-    expect(bridges.get("c2")?.get("c1")).toBe(2);
+    const c1Bridges = bridges.get("c1") ?? [];
+    const toC2 = c1Bridges.find((b) => b.targetClusterId === "c2");
+    expect(toC2?.sharedCount).toBe(2);
+    expect(toC2?.bridgePubkeys).toContain("bob");
+    expect(toC2?.bridgePubkeys).toContain("carol");
+    // c1 has no bridge to c3
+    expect(c1Bridges.find((b) => b.targetClusterId === "c3")).toBeUndefined();
+  });
+});
+
+describe("findUserCluster", () => {
+  const clusters: Cluster[] = [
+    { id: "c1", label: "a", hashtags: [], memberPubkeys: new Set(["alice"]), color: "#f00" },
+    { id: "c2", label: "b", hashtags: [], memberPubkeys: new Set(["bob"]), color: "#0f0" },
+  ];
+
+  it("finds the cluster containing the pubkey", () => {
+    expect(findUserCluster("alice", clusters)?.id).toBe("c1");
+    expect(findUserCluster("bob", clusters)?.id).toBe("c2");
+  });
+
+  it("returns null for unknown pubkey", () => {
+    expect(findUserCluster("unknown", clusters)).toBeNull();
+  });
+});
+
+describe("clusterConnectivity", () => {
+  it("sums bridge counts per cluster", () => {
+    const clusters: Cluster[] = [
+      { id: "c1", label: "a", hashtags: [], memberPubkeys: new Set(["alice", "bob"]), color: "#f00" },
+      { id: "c2", label: "b", hashtags: [], memberPubkeys: new Set(["bob", "carol"]), color: "#0f0" },
+    ];
+    const bridges = computeBridges(clusters);
+    const conn = clusterConnectivity(bridges);
+    expect(conn.get("c1")).toBe(1); // 1 shared with c2
+    expect(conn.get("c2")).toBe(1);
   });
 });

@@ -3,6 +3,8 @@ import type { ClusterStrategy } from "@/domain/services/cluster-strategy";
 
 interface UIStore {
   clusterStrategy: ClusterStrategy;
+  /** User's own pubkey for "you are here" */
+  myPubkey: string | null;
   selectedClusterId: string | null;
   selectedNodeId: string | null;
   isTimelinePanelOpen: boolean;
@@ -26,6 +28,7 @@ interface UIStore {
   setFlyToClusterFn: (fn: ((clusterId: string) => void) | null) => void;
   setReheatSimulationFn: (fn: (() => void) | null) => void;
   reheatSimulation: () => void;
+  setMyPubkey: (pubkey: string | null) => void;
   setClusterStrategy: (strategy: ClusterStrategy) => void;
   setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
@@ -33,6 +36,7 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set, get) => ({
   clusterStrategy: "topic" as ClusterStrategy,
+  myPubkey: null,
   selectedClusterId: null,
   selectedNodeId: null,
   isTimelinePanelOpen: false,
@@ -66,6 +70,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setFlyToClusterFn: (fn) => set({ flyToClusterFn: fn }),
   setReheatSimulationFn: (fn) => set({ reheatSimulationFn: fn }),
   reheatSimulation: () => get().reheatSimulationFn?.(),
+
+  setMyPubkey: (pubkey) => set({ myPubkey: pubkey }),
 
   setClusterStrategy: (strategy) =>
     set({
