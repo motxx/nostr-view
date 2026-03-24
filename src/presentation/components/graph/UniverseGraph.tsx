@@ -83,33 +83,6 @@ function getGlowTexture(color: string): any {
   return tex;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getNebulaTexture(color: string, type: "outer" | "inner"): any {
-  const key = `nebula-${type}-${color}`;
-  const cached = glowTextureCache.get(key);
-  if (cached) return cached;
-  const size = type === "outer" ? 256 : 128;
-  const half = size / 2;
-  const canvas = new OffscreenCanvas(size, size);
-  const ctx = canvas.getContext("2d")!;
-  const g = ctx.createRadialGradient(half, half, 0, half, half, half);
-  if (type === "outer") {
-    g.addColorStop(0, color + "45");
-    g.addColorStop(0.3, color + "25");
-    g.addColorStop(0.7, color + "0c");
-    g.addColorStop(1, "transparent");
-  } else {
-    g.addColorStop(0, color + "70");
-    g.addColorStop(0.4, color + "35");
-    g.addColorStop(1, "transparent");
-  }
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  glowTextureCache.set(key, tex);
-  return tex;
-}
-
 // ── Avatar texture loader ──
 
 const avatarLoader = new THREE.TextureLoader();
@@ -380,34 +353,7 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
   );
 }
 
-// ── Cluster Nebula ──
-
-function ClusterNebula({
-  color,
-  memberCount,
-  position,
-}: {
-  color: string;
-  memberCount: number;
-  position: [number, number, number];
-}) {
-  const nebulaSize = Math.min(150, 40 + memberCount * 2);
-  const outerTex = useMemo(() => getNebulaTexture(color, "outer"), [color]);
-  const innerTex = useMemo(() => getNebulaTexture(color, "inner"), [color]);
-
-  return (
-    <group position={position}>
-      <sprite scale={[nebulaSize, nebulaSize, 1]}>
-        <spriteMaterial map={outerTex} transparent blending={THREE.AdditiveBlending} depthWrite={false} />
-      </sprite>
-      <sprite scale={[nebulaSize * 0.4, nebulaSize * 0.4, 1]}>
-        <spriteMaterial map={innerTex} transparent blending={THREE.AdditiveBlending} depthWrite={false} />
-      </sprite>
-    </group>
-  );
-}
-
-// ── Camera monitor (replaces linkColor piggyback) ──
+// ── Camera monitor ──
 
 function CameraMonitor() {
   const lastCheckRef = useRef(0);
@@ -529,27 +475,6 @@ function ForceGraphScene() {
     }
   });
 
-  // Compute cluster centroids (derived, every frame via useMemo would be wrong — use useFrame)
-  const [nebulaPositions, setNebulaPositions] = useState<
-    Map<string, [number, number, number]>
-  >(new Map());
-
-  const lastNebulaUpdateRef = useRef(0);
-  useFrame(() => {
-    const now = Date.now();
-    if (now - lastNebulaUpdateRef.current < 300) return;
-    lastNebulaUpdateRef.current = now;
-    const s = simStateRef.current;
-    if (!s) return;
-
-    const newPositions = new Map<string, [number, number, number]>();
-    for (const cluster of clusters) {
-      const c = computeClusterCentroid(cluster, s.nodes as NodePosition[]);
-      if (c) newPositions.set(cluster.id, [c.x, c.y - 15, c.z]);
-    }
-    setNebulaPositions(newPositions);
-  });
-
   // Register UI callbacks — done in useFrame's first tick (not during render)
   // to avoid "setState during render" error. The callbacks read from refs
   // so they always access current state.
@@ -633,20 +558,6 @@ function ForceGraphScene() {
 
       {/* Links */}
       <GraphLinks simState={simStateRef} />
-
-      {/* Cluster nebulae */}
-      {clusters.map((cluster) => {
-        const pos = nebulaPositions.get(cluster.id);
-        if (!pos) return null;
-        return (
-          <ClusterNebula
-            key={cluster.id}
-            color={cluster.color}
-            memberCount={cluster.memberPubkeys.size}
-            position={pos}
-          />
-        );
-      })}
 
       {/* Camera monitor */}
       <CameraMonitor />
