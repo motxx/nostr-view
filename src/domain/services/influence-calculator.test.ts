@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  calculateInfluence,
   calculateInfluenceScores,
   getMetricsForPubkey,
 } from "./influence-calculator";
@@ -141,5 +142,22 @@ describe("getMetricsForPubkey", () => {
       repostCount: 0,
       noteCount: 0,
     });
+  });
+});
+
+describe("calculateInfluence", () => {
+  it("returns both scores and metrics", () => {
+    const events = [
+      makeEvent({ pubkey: "alice", kind: NOSTR_KIND.TEXT_NOTE }),
+      makeEvent({
+        pubkey: "bob",
+        kind: NOSTR_KIND.REACTION,
+        tags: [["p", "alice"]],
+      }),
+    ];
+    const { scores, metrics } = calculateInfluence(events);
+    expect(scores["alice"]).toBeCloseTo(0.6); // 0.1 note + 0.5 reaction
+    expect(metrics.get("alice")?.noteCount).toBe(1);
+    expect(metrics.get("alice")?.reactionCount).toBe(1);
   });
 });
