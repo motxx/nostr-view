@@ -5,16 +5,21 @@ export interface InfluenceScores {
   [pubkey: string]: number;
 }
 
-interface InfluenceMetrics {
+export interface InfluenceMetrics {
   followerCount: number;
   reactionCount: number;
   repostCount: number;
   noteCount: number;
 }
 
-export function calculateInfluenceScores(
+export interface InfluenceResult {
+  scores: InfluenceScores;
+  metrics: Map<string, InfluenceMetrics>;
+}
+
+export function calculateInfluence(
   events: NostrEvent[],
-): InfluenceScores {
+): InfluenceResult {
   const metrics = new Map<string, InfluenceMetrics>();
 
   const getOrCreate = (pubkey: string): InfluenceMetrics => {
@@ -71,7 +76,14 @@ export function calculateInfluenceScores(
       m.repostCount * 2.0 +
       m.noteCount * 0.1;
   }
-  return scores;
+  return { scores, metrics };
+}
+
+/** @deprecated Use calculateInfluence instead */
+export function calculateInfluenceScores(
+  events: NostrEvent[],
+): InfluenceScores {
+  return calculateInfluence(events).scores;
 }
 
 export function getMetricsForPubkey(

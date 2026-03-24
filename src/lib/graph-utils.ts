@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { getCachedTexture } from "./texture-cache";
 
 /* ── Tier types ── */
 export type NodeTier = "star" | "planet" | "dust";
@@ -92,23 +91,42 @@ function createLabelSprite(
 
 /* ── Avatar sphere helper ── */
 
+const avatarLoader = new THREE.TextureLoader();
+avatarLoader.crossOrigin = "anonymous";
+
+/**
+ * Creates a sphere with a color fallback.
+ * If pictureUrl is provided, loads the texture asynchronously
+ * and swaps the material once loaded (no useEffect needed).
+ */
 function createAvatarSphere(
   radius: number,
   color: THREE.Color,
   pictureUrl?: string,
 ): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(radius, 32, 32);
-  const tex = pictureUrl ? getCachedTexture(pictureUrl) : undefined;
+  const fallback = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const mesh = new THREE.Mesh(geometry, fallback);
 
-  const material = tex
-    ? new THREE.MeshBasicMaterial({ map: tex })
-    : new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.9,
-      });
+  if (pictureUrl) {
+    avatarLoader.load(
+      pictureUrl,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        mesh.material = new THREE.MeshBasicMaterial({ map: tex });
+      },
+      undefined,
+      () => {}, // Silently keep fallback on error
+    );
+  }
 
-  return new THREE.Mesh(geometry, material);
+  return mesh;
 }
 
 /* ── Orbit ring (Star only) ── */

@@ -5,7 +5,7 @@ import type { GraphEdge } from "@/domain/entities/graph-edge";
 import type { Cluster } from "@/domain/entities/cluster";
 import type { NostrProfile } from "@/domain/entities/nostr-profile";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
-import { calculateInfluenceScores } from "./influence-calculator";
+import { calculateInfluence } from "./influence-calculator";
 
 export interface GraphData {
   nodes: GraphNode[];
@@ -17,7 +17,7 @@ export function buildGraph(
   profiles: Map<string, NostrProfile>,
   clusters: Cluster[],
 ): GraphData {
-  const scores = calculateInfluenceScores(events);
+  const { scores, metrics } = calculateInfluence(events);
   const pubkeySet = new Set<string>();
   const edges: GraphEdge[] = [];
   const edgeSet = new Set<string>();
@@ -119,16 +119,17 @@ export function buildGraph(
   const nodes: GraphNode[] = [...pubkeySet].map((pubkey) => {
     const profile = profiles.get(pubkey);
     const score = scores[pubkey] ?? 0;
+    const m = metrics.get(pubkey);
     return {
       id: pubkey,
       name: profile?.displayName ?? profile?.name,
       picture: profile?.picture,
       influenceScore: score,
       clusterId: pubkeyCluster.get(pubkey),
-      noteCount: 0,
-      followerCount: 0,
-      reactionCount: 0,
-      repostCount: 0,
+      noteCount: m?.noteCount ?? 0,
+      followerCount: m?.followerCount ?? 0,
+      reactionCount: m?.reactionCount ?? 0,
+      repostCount: m?.repostCount ?? 0,
     };
   });
 

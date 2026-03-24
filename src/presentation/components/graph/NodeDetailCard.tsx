@@ -57,7 +57,7 @@ export function NodeDetailCard() {
   const timeAgo = lastActive ? formatTimeAgo(lastActive) : "unknown";
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] w-80 pointer-events-auto">
+    <div className="fixed top-16 left-6 z-[100] w-80 pointer-events-auto">
       <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
