@@ -99,14 +99,20 @@ function resolveNodeId(v: string | number | GNode | undefined): string | undefin
   return typeof v === "object" ? (v.id as string) : String(v);
 }
 
+/**
+ * Compute cluster centroid from live node positions.
+ * `liveNodes` should come from graphRef.current.graphData().nodes
+ * (force-graph's internal state with real-time positions),
+ * NOT from prevNodesRef (stale snapshot).
+ */
 function computeClusterCentroid(
   clusterId: string,
-  nodesMap: Map<string, GNode>,
+  liveNodes: GNode[],
 ): { x: number; y: number; z: number } | null {
   const cluster = useGraphStore.getState().clusters.find((c) => c.id === clusterId);
   if (!cluster) return null;
   let x = 0, y = 0, z = 0, count = 0;
-  for (const [, n] of nodesMap) {
+  for (const n of liveNodes) {
     if (!n.isClusterNode && cluster.memberPubkeys.has(n.id as string) && n.x !== undefined) {
       x += n.x; y += n.y ?? 0; z += n.z ?? 0; count++;
     }
@@ -205,9 +211,13 @@ function UniverseGraphInner() {
       return node;
     });
 
+    // Add cluster centroid nodes + invisible links to members.
+    // Force-graph's simulation naturally positions them at the cluster centroid.
+    const clusterLinks: GLink[] = [];
     for (const cluster of clusters) {
+      const cid = `cluster:${cluster.id}`;
       graphNodes.push({
-        id: `cluster:${cluster.id}`,
+        id: cid,
         name: `#${cluster.label}`,
         influenceScore: 0,
         clusterId: cluster.id,
@@ -216,6 +226,15 @@ function UniverseGraphInner() {
         isClusterNode: true,
         memberCount: cluster.memberPubkeys.size,
       } as GNode);
+      // Invisible links pull the centroid node toward its members
+      for (const pk of cluster.memberPubkeys) {
+        clusterLinks.push({
+          source: cid,
+          target: pk,
+          type: "cluster",
+          weight: 0,
+        } as GLink);
+      }
     }
 
     const newMap = new Map<string, GNode>();
@@ -224,9 +243,12 @@ function UniverseGraphInner() {
 
     return {
       nodes: graphNodes,
-      links: edges.map((e) => ({
-        source: e.source, target: e.target, type: e.type, weight: e.weight,
-      })),
+      links: [
+        ...edges.map((e) => ({
+          source: e.source, target: e.target, type: e.type, weight: e.weight,
+        })),
+        ...clusterLinks,
+      ],
     };
   }, [nodes, edges, clusterColorMap, tierMap, clusters]);
 
@@ -263,7 +285,9 @@ function UniverseGraphInner() {
       fg.cameraPosition({ x: 0, y: 0, z: 500 }, { x: 0, y: 0, z: 0 }, 1500);
     });
     useUIStore.getState().setFlyToClusterFn((clusterId) => {
-      const c = computeClusterCentroid(clusterId, prevNodesRef.current);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const liveNodes = ((fg as any).graphData()?.nodes ?? []) as GNode[];
+      const c = computeClusterCentroid(clusterId, liveNodes);
       if (!c) return;
       fg.cameraPosition(
         { x: c.x + 150, y: c.y + 50, z: c.z + 150 },
@@ -272,35 +296,19 @@ function UniverseGraphInner() {
       );
     });
 
-    // Strategy change → reheat (triggered here because onEngineStop fires after data update)
+    // Strategy change → reheat
     if (prevStrategyRef.current && prevStrategyRef.current !== useUIStore.getState().clusterStrategy) {
       fg.d3ReheatSimulation();
     }
     prevStrategyRef.current = useUIStore.getState().clusterStrategy;
+
   }, []);
 
   const nodeThreeObject = useCallback((node: GNode) => {
     if (node.isClusterNode) {
-      const group = createClusterLabelNode(
+      return createClusterLabelNode(
         node.name ?? "", node.clusterColor ?? "#fff", node.memberCount ?? 10,
       );
-      // Track centroid each frame — offset the group position relative to
-      // the node's force-graph position so the nebula follows its members.
-      const clusterId = node.clusterId;
-      if (group.children[0] && clusterId) {
-        group.children[0].onBeforeRender = () => {
-          const c = computeClusterCentroid(clusterId, prevNodesRef.current);
-          if (c) {
-            // Offset group so it renders at centroid instead of force-graph position
-            group.position.set(
-              c.x - (node.x ?? 0),
-              c.y - 15 - (node.y ?? 0),
-              c.z - (node.z ?? 0),
-            );
-          }
-        };
-      }
-      return group;
     }
 
     const score = node.influenceScore ?? 0;
@@ -333,14 +341,10 @@ function UniverseGraphInner() {
   }, []);
 
   const handleNodeClick = useCallback((node: GNode) => {
-    if (node.isClusterNode && node.clusterId) {
-      useUIStore.getState().selectCluster(node.clusterId);
-    } else {
-      useUIStore.getState().selectNode(node.id as string);
-    }
+    useUIStore.getState().selectNode(node.id as string);
     const fg = graphRef.current;
     if (fg && node.x !== undefined && node.y !== undefined && node.z !== undefined) {
-      const d = node.isClusterNode ? 200 : 100;
+      const d = 100;
       const r = 1 + d / Math.hypot(node.x, node.y, node.z || 1);
       fg.cameraPosition(
         { x: node.x * r, y: node.y * r, z: (node.z || 0) * r },
@@ -373,6 +377,9 @@ function UniverseGraphInner() {
         );
       }
     }
+
+    // Cluster links are invisible (only provide force)
+    if (edge.type === "cluster") return "rgba(0,0,0,0)";
 
     const hovered = useUIStore.getState().hoveredNodeId;
     const src = resolveNodeId(edge.source);
@@ -426,7 +433,7 @@ function UniverseGraphInner() {
         nodeThreeObject={nodeThreeObject}
         nodeThreeObjectExtend={false}
         linkColor={linkColor}
-        linkWidth={(e: GLink) => (e.weight ?? 1) * 0.3}
+        linkWidth={(e: GLink) => e.type === "cluster" ? 0 : (e.weight ?? 1) * 0.3}
         linkOpacity={0.3}
         linkDirectionalParticles={linkParticles}
         linkDirectionalParticleWidth={linkParticleWidth}
