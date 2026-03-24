@@ -14,7 +14,10 @@ export function TimelinePanel() {
   const isOpen = useUIStore((s) => s.isTimelinePanelOpen);
   const selectedClusterId = useUIStore((s) => s.selectedClusterId);
   const selectedNodeId = useUIStore((s) => s.selectedNodeId);
-  const setTimelinePanelOpen = useUIStore((s) => s.setTimelinePanelOpen);
+
+  const handleClose = () => {
+    useUIStore.getState().setTimelinePanelOpen(false);
+  };
 
   const title = selectedClusterId
     ? "Cluster Timeline"
@@ -22,8 +25,11 @@ export function TimelinePanel() {
       ? "User Timeline"
       : "Timeline";
 
+  // Don't render Sheet at all when closed — prevents onOpenChange race conditions
+  if (!isOpen) return null;
+
   return (
-    <Sheet open={isOpen} onOpenChange={setTimelinePanelOpen}>
+    <Sheet open onOpenChange={(open) => { if (!open) handleClose(); }}>
       <SheetContent
         side="right"
         className="w-full max-w-[400px] sm:max-w-[450px] bg-[#0a0a12]/95 border-white/10 p-0"
