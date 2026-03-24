@@ -336,15 +336,6 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
       const tgt = typeof link.target === "object" ? link.target : s.nodeMap.get(String(link.target));
       if (!src || !tgt) continue;
 
-      // Position
-      pos[i * 6] = src.x ?? 0;
-      pos[i * 6 + 1] = src.y ?? 0;
-      pos[i * 6 + 2] = src.z ?? 0;
-      pos[i * 6 + 3] = tgt.x ?? 0;
-      pos[i * 6 + 4] = tgt.y ?? 0;
-      pos[i * 6 + 5] = tgt.z ?? 0;
-
-      // Color: bright if connected to active node, invisible otherwise
       const srcId = String(src.id);
       const tgtId = String(tgt.id);
       const isActive =
@@ -353,12 +344,23 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
         connected.has(srcId) &&
         connected.has(tgtId);
 
-      const r = isActive ? 0.5 : 0;
-      const g = isActive ? 0.7 : 0;
-      const b = isActive ? 1.0 : 0;
-
-      col[i * 6] = r;     col[i * 6 + 1] = g;     col[i * 6 + 2] = b;
-      col[i * 6 + 3] = r; col[i * 6 + 4] = g; col[i * 6 + 5] = b;
+      if (isActive) {
+        // Show: real positions + bright color
+        pos[i * 6] = src.x ?? 0;
+        pos[i * 6 + 1] = src.y ?? 0;
+        pos[i * 6 + 2] = src.z ?? 0;
+        pos[i * 6 + 3] = tgt.x ?? 0;
+        pos[i * 6 + 4] = tgt.y ?? 0;
+        pos[i * 6 + 5] = tgt.z ?? 0;
+        col[i * 6] = 0.5; col[i * 6 + 1] = 0.7; col[i * 6 + 2] = 1.0;
+        col[i * 6 + 3] = 0.5; col[i * 6 + 4] = 0.7; col[i * 6 + 5] = 1.0;
+      } else {
+        // Hide: collapse to zero-length line (no draw artifact)
+        pos[i * 6] = 0; pos[i * 6 + 1] = 0; pos[i * 6 + 2] = 0;
+        pos[i * 6 + 3] = 0; pos[i * 6 + 4] = 0; pos[i * 6 + 5] = 0;
+        col[i * 6] = 0; col[i * 6 + 1] = 0; col[i * 6 + 2] = 0;
+        col[i * 6 + 3] = 0; col[i * 6 + 4] = 0; col[i * 6 + 5] = 0;
+      }
     }
 
     posAttr.needsUpdate = true;
