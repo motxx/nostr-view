@@ -502,14 +502,19 @@ function ForceGraphScene() {
     setNebulaPositions(newPositions);
   });
 
-  // Register UI callbacks
-  useMemo(() => {
+  // Register UI callbacks — done in useFrame's first tick (not during render)
+  // to avoid "setState during render" error. The callbacks read from refs
+  // so they always access current state.
+  const callbacksRegistered = useRef(false);
+  useFrame(() => {
+    if (callbacksRegistered.current) return;
+    callbacksRegistered.current = true;
+
     useUIStore.getState().setReheatSimulationFn(() => {
       simStateRef.current?.sim.alpha(1).restart();
     });
 
     useUIStore.getState().setResetCameraFn(() => {
-      // Animate camera to default position
       camera.position.set(0, 0, 500);
       camera.lookAt(0, 0, 0);
     });
@@ -517,14 +522,15 @@ function ForceGraphScene() {
     useUIStore.getState().setFlyToClusterFn((clusterId) => {
       const s = simStateRef.current;
       if (!s) return;
-      const cluster = clusters.find((c) => c.id === clusterId);
+      const currentClusters = useGraphStore.getState().clusters;
+      const cluster = currentClusters.find((c) => c.id === clusterId);
       if (!cluster) return;
       const c = computeClusterCentroid(cluster, s.nodes as NodePosition[]);
       if (!c) return;
       camera.position.set(c.x + 150, c.y + 50, c.z + 150);
       camera.lookAt(c.x, c.y, c.z);
     });
-  }, [camera, clusters]);
+  });
 
   // Event handlers
   const handleNodeSelect = useCallback((id: string) => {
