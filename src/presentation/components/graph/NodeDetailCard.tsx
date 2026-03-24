@@ -8,6 +8,16 @@ import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { primalProfileUrl, primalNoteUrl } from "@/lib/nostr-url";
 import { useMemo } from "react";
 
+function ExternalLinkIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+      <path d="M9 6.5V9.5C9 10.05 8.55 10.5 8 10.5H2.5C1.95 10.5 1.5 10.05 1.5 9.5V4C1.5 3.45 1.95 3 2.5 3H5.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M7.5 1.5H10.5V4.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 7L10.5 1.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export function NodeDetailCard() {
   const selectedNodeId = useUIStore((s) => s.selectedNodeId);
   const selectNode = useUIStore((s) => s.selectNode);
@@ -104,42 +114,37 @@ export function NodeDetailCard() {
         {/* Latest note */}
         {latestNote && (
           <div className="border-t border-white/10 pt-3">
-            <div className="flex items-center justify-between mb-1">
-              <div className="font-mono text-xs text-white/40">
-                Latest post
-              </div>
-              <a
-                href={primalNoteUrl(latestNote.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-xs text-blue-400/60 hover:text-blue-400 transition-colors"
-              >
-                primal &rarr;
-              </a>
+            <div className="font-mono text-xs text-white/40 mb-1">
+              Latest post
             </div>
-            <a
-              href={primalNoteUrl(latestNote.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block"
-            >
-              <div className="font-mono text-xs text-white/70 hover:text-white/90 transition-colors leading-relaxed line-clamp-4 break-all">
-                {latestNote.content}
-              </div>
-            </a>
+            <div className="font-mono text-xs text-white/70 leading-relaxed line-clamp-4 break-all mb-2">
+              {latestNote.content}
+            </div>
           </div>
         )}
 
-        {/* Profile link */}
-        <div className="border-t border-white/10 pt-2 mt-3">
+        {/* Primal buttons */}
+        <div className="border-t border-white/10 pt-3 mt-1 flex gap-2">
           <a
             href={primalProfileUrl(selectedNodeId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-xs text-blue-400/70 hover:text-blue-400 transition-colors flex items-center gap-1"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-500/15 border border-purple-400/30 font-mono text-xs text-purple-300 hover:bg-purple-500/25 hover:text-purple-200 transition-colors"
           >
-            View full profile on Primal &rarr;
+            Profile
+            <ExternalLinkIcon />
           </a>
+          {latestNote && (
+            <a
+              href={primalNoteUrl(latestNote.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-500/15 border border-purple-400/30 font-mono text-xs text-purple-300 hover:bg-purple-500/25 hover:text-purple-200 transition-colors"
+            >
+              Latest Note
+              <ExternalLinkIcon />
+            </a>
+          )}
         </div>
       </div>
     </div>

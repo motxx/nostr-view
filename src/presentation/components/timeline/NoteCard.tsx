@@ -46,6 +46,16 @@ function Avatar({ src, name }: { src?: string; name: string }) {
   );
 }
 
+function ExternalLinkIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+      <path d="M9 6.5V9.5C9 10.05 8.55 10.5 8 10.5H2.5C1.95 10.5 1.5 10.05 1.5 9.5V4C1.5 3.45 1.95 3 2.5 3H5.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M7.5 1.5H10.5V4.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 7L10.5 1.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export function NoteCard({ event, profile, compact }: NoteCardProps) {
   const displayName =
     profile?.displayName ||
@@ -79,26 +89,19 @@ export function NoteCard({ event, profile, compact }: NoteCardProps) {
               <span className="font-mono text-xs text-white/30 shrink-0">
                 {formatTime(event.created_at)}
               </span>
-              <a
-                href={primalNoteUrl(event.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-xs text-blue-400/60 hover:text-blue-400 transition-colors shrink-0 ml-auto"
-                title="Open in Primal"
-              >
-                primal
-              </a>
             </div>
+            <p className="text-sm text-white/60 break-words whitespace-pre-wrap leading-relaxed mb-2">
+              {event.content.slice(0, maxLen)}
+              {event.content.length > maxLen && "..."}
+            </p>
             <a
               href={primalNoteUrl(event.id)}
               target="_blank"
               rel="noopener noreferrer"
-              className="block"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-500/15 border border-purple-400/30 font-mono text-xs text-purple-300 hover:bg-purple-500/25 hover:text-purple-200 transition-colors"
             >
-              <p className="text-sm text-white/60 hover:text-white/75 transition-colors break-words whitespace-pre-wrap leading-relaxed">
-                {event.content.slice(0, maxLen)}
-                {event.content.length > maxLen && "..."}
-              </p>
+              Open in Primal
+              <ExternalLinkIcon />
             </a>
           </div>
         </div>
