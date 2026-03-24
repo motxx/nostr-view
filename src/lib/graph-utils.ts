@@ -240,9 +240,9 @@ export function createClusterLabelNode(
   const outerCanvas = new OffscreenCanvas(256, 256);
   const outerCtx = outerCanvas.getContext("2d")!;
   const outerGrad = outerCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  outerGrad.addColorStop(0, color + "30");
-  outerGrad.addColorStop(0.3, color + "18");
-  outerGrad.addColorStop(0.7, color + "08");
+  outerGrad.addColorStop(0, color + "45");
+  outerGrad.addColorStop(0.3, color + "25");
+  outerGrad.addColorStop(0.7, color + "0c");
   outerGrad.addColorStop(1, "transparent");
   outerCtx.fillStyle = outerGrad;
   outerCtx.fillRect(0, 0, 256, 256);
@@ -261,8 +261,8 @@ export function createClusterLabelNode(
   const innerCanvas = new OffscreenCanvas(128, 128);
   const innerCtx = innerCanvas.getContext("2d")!;
   const innerGrad = innerCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  innerGrad.addColorStop(0, color + "50");
-  innerGrad.addColorStop(0.4, color + "25");
+  innerGrad.addColorStop(0, color + "70");
+  innerGrad.addColorStop(0.4, color + "35");
   innerGrad.addColorStop(1, "transparent");
   innerCtx.fillStyle = innerGrad;
   innerCtx.fillRect(0, 0, 128, 128);

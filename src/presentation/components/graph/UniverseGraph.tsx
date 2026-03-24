@@ -149,7 +149,7 @@ function setupBloom(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: T
   const size = renderer.getSize(new THREE.Vector2());
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(size, 0.4, 0.3, 0.85));
+  composer.addPass(new UnrealBloomPass(size, 0.35, 0.25, 0.92));
 
   const origRender = renderer.render.bind(renderer);
   let inComposer = false;

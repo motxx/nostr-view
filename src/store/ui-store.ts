@@ -61,7 +61,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setFlyToClusterFn: (fn) => set({ flyToClusterFn: fn }),
 
   setClusterStrategy: (strategy) =>
-    set({ clusterStrategy: strategy, selectedClusterId: null }),
+    set({
+      clusterStrategy: strategy,
+      selectedClusterId: null,
+      selectedNodeId: null,
+      isTimelinePanelOpen: false,
+    }),
 
   setCameraMoved: (moved) => {
     if (get().isCameraMoved !== moved) set({ isCameraMoved: moved });
