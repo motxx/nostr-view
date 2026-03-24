@@ -50,6 +50,17 @@ interface SimState {
   nodeMap: Map<string, GraphNodeData>;
 }
 
+// ── Pure helpers ──
+
+function buildConnectedSet(hoveredId: string): Set<string> {
+  const set = new Set<string>([hoveredId]);
+  for (const e of useGraphStore.getState().edges) {
+    if (e.source === hoveredId) set.add(e.target);
+    if (e.target === hoveredId) set.add(e.source);
+  }
+  return set;
+}
+
 // ── Texture cache (module-level, survives re-renders) ──
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,7 +212,7 @@ function LabelSprite({
   }, [text, alpha]);
 
   return (
-    <sprite position={[0, size + 3, 0]} scale={[size * 4, size, 1]}>
+    <sprite position={[0, size + 2, 0]} scale={[size * 2.5, size * 0.6, 1]}>
       <spriteMaterial map={tex} transparent depthWrite={false} />
     </sprite>
   );
@@ -330,7 +341,7 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
 
   return (
     <lineSegments ref={lineRef} geometry={geom}>
-      <lineBasicMaterial color="#ffffff" transparent opacity={0.12} />
+      <lineBasicMaterial color="#ffffff" transparent opacity={0.03} blending={THREE.AdditiveBlending} />
     </lineSegments>
   );
 }
@@ -346,7 +357,7 @@ function ClusterNebula({
   memberCount: number;
   position: [number, number, number];
 }) {
-  const nebulaSize = Math.min(300, 80 + memberCount * 4);
+  const nebulaSize = Math.min(150, 40 + memberCount * 2);
   const outerTex = useMemo(() => getNebulaTexture(color, "outer"), [color]);
   const innerTex = useMemo(() => getNebulaTexture(color, "inner"), [color]);
 
@@ -366,7 +377,10 @@ function ClusterNebula({
 
 function CameraMonitor() {
   const lastCheckRef = useRef(0);
+  const startTimeRef = useRef(Date.now());
   useFrame(({ camera }) => {
+    // Skip first 3 seconds to let simulation settle
+    if (Date.now() - startTimeRef.current < 3000) return;
     const now = Date.now();
     if (now - lastCheckRef.current < 300) return;
     lastCheckRef.current = now;
@@ -551,6 +565,18 @@ function ForceGraphScene() {
 
   const handleNodeHover = useCallback((id: string | null) => {
     useUIStore.getState().setHoveredNode(id);
+    // Dim non-connected nodes (direct response to user event)
+    const connected = id ? buildConnectedSet(id) : null;
+    for (const [nid, group] of nodeGroupRefs.current) {
+      const highlight = !connected || connected.has(nid);
+      group.traverse((child) => {
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.Sprite)) return;
+        const mat = child.material as THREE.Material & { opacity?: number };
+        if (mat.opacity === undefined) return;
+        mat.userData.origOpacity ??= mat.opacity;
+        mat.opacity = highlight ? (mat.userData.origOpacity as number) : 0.08;
+      });
+    }
   }, []);
 
   return (
