@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import type { ClusterStrategy } from "@/domain/services/cluster-strategy";
 
 interface UIStore {
+  clusterStrategy: ClusterStrategy;
   selectedClusterId: string | null;
   selectedNodeId: string | null;
   isTimelinePanelOpen: boolean;
@@ -20,11 +22,13 @@ interface UIStore {
   setHoveredNode: (nodeId: string | null) => void;
   setResetCameraFn: (fn: (() => void) | null) => void;
   setFlyToClusterFn: (fn: ((clusterId: string) => void) | null) => void;
+  setClusterStrategy: (strategy: ClusterStrategy) => void;
   setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
+  clusterStrategy: "topic" as ClusterStrategy,
   selectedClusterId: null,
   selectedNodeId: null,
   isTimelinePanelOpen: false,
@@ -55,6 +59,9 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   setResetCameraFn: (fn) => set({ resetCameraFn: fn }),
   setFlyToClusterFn: (fn) => set({ flyToClusterFn: fn }),
+
+  setClusterStrategy: (strategy) =>
+    set({ clusterStrategy: strategy, selectedClusterId: null }),
 
   setCameraMoved: (moved) => {
     if (get().isCameraMoved !== moved) set({ isCameraMoved: moved });

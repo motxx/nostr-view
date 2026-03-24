@@ -229,28 +229,53 @@ export function createDustNode(score: number, color: string): THREE.Group {
 export function createClusterLabelNode(
   name: string,
   color: string,
+  memberCount: number,
 ): THREE.Group {
   const group = new THREE.Group();
 
-  // Nebula glow
-  const glowCanvas = new OffscreenCanvas(128, 128);
-  const glowCtx = glowCanvas.getContext("2d")!;
-  const gradient = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, color + "30");
-  gradient.addColorStop(0.5, color + "10");
-  gradient.addColorStop(1, "transparent");
-  glowCtx.fillStyle = gradient;
-  glowCtx.fillRect(0, 0, 128, 128);
-  const glowTex = new THREE.CanvasTexture(glowCanvas);
-  const glowMat = new THREE.SpriteMaterial({
-    map: glowTex,
+  // Scale nebula based on member count (more members → bigger cloud)
+  const nebulaSize = Math.min(300, 80 + memberCount * 4);
+
+  // Outer nebula cloud — large, very faint, gives the region its color
+  const outerCanvas = new OffscreenCanvas(256, 256);
+  const outerCtx = outerCanvas.getContext("2d")!;
+  const outerGrad = outerCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  outerGrad.addColorStop(0, color + "30");
+  outerGrad.addColorStop(0.3, color + "18");
+  outerGrad.addColorStop(0.7, color + "08");
+  outerGrad.addColorStop(1, "transparent");
+  outerCtx.fillStyle = outerGrad;
+  outerCtx.fillRect(0, 0, 256, 256);
+  const outerTex = new THREE.CanvasTexture(outerCanvas);
+  const outerMat = new THREE.SpriteMaterial({
+    map: outerTex,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const glow = new THREE.Sprite(glowMat);
-  glow.scale.set(60, 60, 1);
-  group.add(glow);
+  const outerGlow = new THREE.Sprite(outerMat);
+  outerGlow.scale.set(nebulaSize, nebulaSize, 1);
+  group.add(outerGlow);
+
+  // Inner nebula core — brighter center
+  const innerCanvas = new OffscreenCanvas(128, 128);
+  const innerCtx = innerCanvas.getContext("2d")!;
+  const innerGrad = innerCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  innerGrad.addColorStop(0, color + "50");
+  innerGrad.addColorStop(0.4, color + "25");
+  innerGrad.addColorStop(1, "transparent");
+  innerCtx.fillStyle = innerGrad;
+  innerCtx.fillRect(0, 0, 128, 128);
+  const innerTex = new THREE.CanvasTexture(innerCanvas);
+  const innerMat = new THREE.SpriteMaterial({
+    map: innerTex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const innerGlow = new THREE.Sprite(innerMat);
+  innerGlow.scale.set(nebulaSize * 0.4, nebulaSize * 0.4, 1);
+  group.add(innerGlow);
 
   // Label
   const labelCanvas = new OffscreenCanvas(512, 128);
@@ -311,10 +336,11 @@ export function influenceToSize(score: number): number {
 
 export function influenceToColor(score: number, baseColor?: string): string {
   if (baseColor) return baseColor;
-  const intensity = Math.min(1, score / 100);
-  const r = Math.round(100 + intensity * 155);
-  const g = Math.round(150 + intensity * 105);
-  const b = Math.round(255);
+  // Warm-to-cool gradient: low score → warm amber, high score → cool white
+  const t = Math.min(1, score / 100);
+  const r = Math.round(180 + t * 75);  // 180→255
+  const g = Math.round(140 + t * 95);  // 140→235
+  const b = Math.round(100 + t * 155);  // 100→255
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
