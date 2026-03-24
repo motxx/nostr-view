@@ -74,6 +74,38 @@ export async function fetchUserNotes(
   return queryEvents([filter]);
 }
 
+/**
+ * Fetch a user's full activity: their notes, replies to them, and reactions to them.
+ * Returns all events combined (deduplicated by the event store).
+ */
+export async function fetchUserActivity(
+  pubkey: string,
+): Promise<NostrEvent[]> {
+  const [ownNotes, mentions] = await Promise.allSettled([
+    // Their own notes (up to 100)
+    queryEvents([
+      {
+        kinds: [NOSTR_KIND.TEXT_NOTE],
+        authors: [pubkey],
+        limit: 100,
+      },
+    ]),
+    // Notes/reactions/reposts that mention them (up to 100)
+    queryEvents([
+      {
+        kinds: [NOSTR_KIND.TEXT_NOTE, NOSTR_KIND.REACTION, NOSTR_KIND.REPOST],
+        "#p": [pubkey],
+        limit: 100,
+      },
+    ]),
+  ]);
+
+  return [
+    ...(ownNotes.status === "fulfilled" ? ownNotes.value : []),
+    ...(mentions.status === "fulfilled" ? mentions.value : []),
+  ];
+}
+
 export function subscribeLiveNotes(
   onEvent: (event: NostrEvent) => void,
   onEose?: () => void,

@@ -24,8 +24,25 @@ export async function queryEvents(
   relays: string[] = DEFAULT_RELAYS,
 ): Promise<NostrEvent[]> {
   const pool = getPool();
-  const events = await pool.querySync(relays, filters[0] ?? {});
-  return events as unknown as NostrEvent[];
+  if (filters.length <= 1) {
+    const events = await pool.querySync(relays, filters[0] ?? {});
+    return events as unknown as NostrEvent[];
+  }
+  // Multiple filters: query each and merge (deduplicate by id)
+  const results = await Promise.all(
+    filters.map((f) => pool.querySync(relays, f)),
+  );
+  const seen = new Set<string>();
+  const merged: NostrEvent[] = [];
+  for (const batch of results) {
+    for (const ev of batch) {
+      if (!seen.has(ev.id)) {
+        seen.add(ev.id);
+        merged.push(ev as unknown as NostrEvent);
+      }
+    }
+  }
+  return merged;
 }
 
 export function subscribeEvents(

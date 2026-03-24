@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEventStore } from "@/store/event-store";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { primalProfileUrl } from "@/lib/nostr-url";
-import { fetchUserNotes } from "@/infra/nostr/event-fetcher";
+import { fetchUserActivity, fetchProfiles } from "@/infra/nostr/event-fetcher";
 import { NoteCard } from "./NoteCard";
 
 interface NodeTimelineProps {
@@ -13,16 +13,27 @@ interface NodeTimelineProps {
 }
 
 export function NodeTimeline({ pubkey }: NodeTimelineProps) {
-  const eventsByAuthor = useEventStore((s) => s.eventsByAuthor);
+  const eventsById = useEventStore((s) => s.eventsById);
   const profiles = useEventStore((s) => s.profiles);
 
-  // Fetch this user's notes on demand via TanStack Query
+  // Fetch this user's full activity on demand
   const { isFetching } = useQuery({
-    queryKey: ["nostr", "user-notes", pubkey],
+    queryKey: ["nostr", "user-activity", pubkey],
     queryFn: async () => {
-      const notes = await fetchUserNotes(pubkey, 50);
-      useEventStore.getState().addEvents(notes);
-      return notes.length;
+      const events = await fetchUserActivity(pubkey);
+      useEventStore.getState().addEvents(events);
+
+      // Also fetch profiles for reply/mention authors
+      const unknownPubkeys = events
+        .map((e) => e.pubkey)
+        .filter((pk) => !useEventStore.getState().profiles.has(pk));
+      const unique = [...new Set(unknownPubkeys)].slice(0, 50);
+      if (unique.length > 0) {
+        const profileEvents = await fetchProfiles(unique);
+        useEventStore.getState().addEvents(profileEvents);
+      }
+
+      return events.length;
     },
     staleTime: 60_000,
   });
@@ -31,14 +42,27 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
   const displayName =
     profile?.displayName || profile?.name || pubkey.slice(0, 12) + "...";
 
+  // Combine: own notes + text notes that mention this user
   const notes = useMemo(() => {
-    const authorEvents = eventsByAuthor.get(pubkey);
-    if (!authorEvents) return [];
-    return [...authorEvents.values()]
-      .filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE)
-      .sort((a, b) => b.created_at - a.created_at)
-      .slice(0, 50);
-  }, [pubkey, eventsByAuthor]);
+    const result: typeof eventsById extends Map<string, infer V> ? V[] : never[] = [];
+    for (const ev of eventsById.values()) {
+      if (ev.kind !== NOSTR_KIND.TEXT_NOTE) continue;
+      // Own notes
+      if (ev.pubkey === pubkey) {
+        result.push(ev);
+        continue;
+      }
+      // Replies mentioning this user
+      if (ev.tags.some((t) => t[0] === "p" && t[1] === pubkey)) {
+        result.push(ev);
+      }
+    }
+    result.sort((a, b) => b.created_at - a.created_at);
+    return result.slice(0, 100);
+  }, [pubkey, eventsById]);
+
+  const ownCount = notes.filter((n) => n.pubkey === pubkey).length;
+  const replyCount = notes.length - ownCount;
 
   return (
     <div className="flex flex-col h-full">
@@ -68,12 +92,18 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
           </div>
         </div>
         <p className="font-mono text-xs text-white/40 mt-1">
-          {isFetching ? "Loading..." : `${notes.length} notes`}
+          {isFetching
+            ? "Loading..."
+            : `${ownCount} notes, ${replyCount} replies`}
         </p>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {notes.map((event) => (
-          <NoteCard key={event.id} event={event} profile={profile} />
+          <NoteCard
+            key={event.id}
+            event={event}
+            profile={profiles.get(event.pubkey)}
+          />
         ))}
         {notes.length === 0 && !isFetching && (
           <p className="font-mono text-sm text-white/30 text-center py-8">
