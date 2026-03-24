@@ -47,7 +47,7 @@ export function GraphControls() {
   }, [clusters, lastPostTime, eventsByKind]);
 
   return (
-    <div className="fixed top-14 right-6 z-50 pointer-events-auto">
+    <div className="fixed top-14 right-6 z-[60] pointer-events-auto">
       <div className="bg-[#0a0a12]/80 border border-white/10 rounded-lg p-3 max-w-sm">
         {/* Strategy switcher */}
         <div className="flex items-center gap-1 mb-3">
