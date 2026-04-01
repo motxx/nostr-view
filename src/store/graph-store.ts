@@ -24,6 +24,7 @@ interface GraphStore {
     bridges: Map<string, BridgeInfo[]>;
     explorationMap: ExplorationMap | null;
   }) => void;
+  updateClusterLabels: (labelMap: Map<string, string>) => void;
   clear: () => void;
 }
 
@@ -43,6 +44,14 @@ export const useGraphStore = create<GraphStore>((set) => ({
   setExplorationMap: (map) => set({ explorationMap: map }),
 
   setAll: (data) => set({ ...data, lastUpdated: Date.now() }),
+
+  updateClusterLabels: (labelMap) =>
+    set((state) => ({
+      clusters: state.clusters.map((c) => {
+        const newLabel = labelMap.get(c.id);
+        return newLabel ? { ...c, label: newLabel } : c;
+      }),
+    })),
 
   clear: () =>
     set({
