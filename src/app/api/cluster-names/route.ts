@@ -27,7 +27,7 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-haiku-4",
+        model: "claude-haiku-4-5",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 1024,
       }),
