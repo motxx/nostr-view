@@ -49,9 +49,16 @@ describe("detectClustersByStrategy", () => {
     expect(btc).toBeDefined();
   });
 
-  it("dispatches to interaction strategy", () => {
+  it("dispatches to interaction strategy and labels from hashtags", () => {
+    // alice and bob interact and both use #bitcoin
     const clusters = detectClustersByStrategy(events, "interaction", 2);
     expect(clusters.length).toBeGreaterThanOrEqual(0);
+    // If a cluster formed, it should have a hashtag-based label (not "Community N")
+    for (const c of clusters) {
+      if (c.hashtags.length > 0) {
+        expect(c.label).not.toMatch(/^Community \d+$/);
+      }
+    }
   });
 
   it("dispatches to language strategy", () => {

@@ -1,5 +1,5 @@
 import type { NostrEvent } from "@/domain/entities/nostr-event";
-import { getReferencedPubkeys } from "@/domain/entities/nostr-event";
+import { getReferencedPubkeys, getHashtags } from "@/domain/entities/nostr-event";
 import { type Cluster, getClusterColor } from "@/domain/entities/cluster";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
@@ -86,18 +86,49 @@ export function detectInteractionClusters(
     groups.get(label)!.add(pk);
   }
 
-  // 4. Convert to Cluster[], sorted by size
+  // 4. Collect hashtags per member for labelling
+  const textNotes = events.filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE);
+  const memberHashtags = new Map<string, Map<string, number>>();
+  for (const event of textNotes) {
+    const tags = getHashtags(event);
+    for (const tag of tags) {
+      if (!memberHashtags.has(event.pubkey)) memberHashtags.set(event.pubkey, new Map());
+      const m = memberHashtags.get(event.pubkey)!;
+      m.set(tag, (m.get(tag) ?? 0) + 1);
+    }
+  }
+
+  // 5. Convert to Cluster[], sorted by size
   const clusters = [...groups.entries()]
     .filter(([, members]) => members.size >= minClusterSize)
     .sort((a, b) => b[1].size - a[1].size)
     .slice(0, maxClusters)
-    .map(([, members], index) => ({
-      id: `interaction-${index}`,
-      label: `Community ${index + 1}`,
-      hashtags: [] as string[],
-      memberPubkeys: members,
-      color: getClusterColor(index),
-    }));
+    .map(([, members], index) => {
+      // Aggregate hashtag counts across cluster members
+      const tagCounts = new Map<string, number>();
+      for (const pk of members) {
+        const tags = memberHashtags.get(pk);
+        if (!tags) continue;
+        for (const [tag, count] of tags) {
+          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + count);
+        }
+      }
+      const topTags = [...tagCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag]) => tag);
+      const hashtags = topTags.slice(0, 10);
+      const label = topTags.length > 0
+        ? topTags.slice(0, 3).join(", ")
+        : `Community ${index + 1}`;
+
+      return {
+        id: `interaction-${index}`,
+        label,
+        hashtags,
+        memberPubkeys: members,
+        color: getClusterColor(index),
+      };
+    });
 
   return clusters;
 }

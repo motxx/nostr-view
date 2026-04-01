@@ -7,13 +7,17 @@ function makeEvent(
   pubkey: string,
   kind: number,
   targets: string[],
+  hashtags: string[] = [],
 ): NostrEvent {
   return {
     id: "ev-" + Math.random().toString(36).slice(2, 8),
     pubkey,
     created_at: 1000,
     kind,
-    tags: targets.map((t) => ["p", t]),
+    tags: [
+      ...targets.map((t) => ["p", t]),
+      ...hashtags.map((h) => ["t", h]),
+    ],
     content: "",
     sig: "sig",
   };
@@ -40,6 +44,33 @@ describe("detectInteractionClusters", () => {
     // Each cluster should have 3 members
     expect(clusters[0].memberPubkeys.size).toBe(3);
     expect(clusters[1].memberPubkeys.size).toBe(3);
+  });
+
+  it("labels clusters from member hashtags", () => {
+    const events = [
+      makeEvent("alice", NOSTR_KIND.TEXT_NOTE, ["bob"], ["bitcoin"]),
+      makeEvent("bob", NOSTR_KIND.TEXT_NOTE, ["alice"], ["bitcoin", "nostr"]),
+      makeEvent("carol", NOSTR_KIND.TEXT_NOTE, ["alice"], ["bitcoin"]),
+    ];
+    const clusters = detectInteractionClusters(events, 3);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].label).toBe("bitcoin, nostr");
+    expect(clusters[0].hashtags).toContain("bitcoin");
+    expect(clusters[0].hashtags).toContain("nostr");
+  });
+
+  it("falls back to Community N when no hashtags", () => {
+    const events = [
+      makeEvent("alice", NOSTR_KIND.TEXT_NOTE, ["bob"]),
+      makeEvent("bob", NOSTR_KIND.TEXT_NOTE, ["alice"]),
+      makeEvent("carol", NOSTR_KIND.REACTION, ["alice"]),
+      makeEvent("alice", NOSTR_KIND.REACTION, ["carol"]),
+      makeEvent("bob", NOSTR_KIND.REACTION, ["carol"]),
+    ];
+    const clusters = detectInteractionClusters(events, 3);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].label).toBe("Community 1");
+    expect(clusters[0].hashtags).toEqual([]);
   });
 
   it("returns empty for no events", () => {

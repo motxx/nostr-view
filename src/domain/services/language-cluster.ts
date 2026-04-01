@@ -1,4 +1,5 @@
 import type { NostrEvent } from "@/domain/entities/nostr-event";
+import { getHashtags } from "@/domain/entities/nostr-event";
 import { type Cluster, getClusterColor } from "@/domain/entities/cluster";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
@@ -57,18 +58,44 @@ export function detectLanguageClusters(
     langGroups.get(bestLang)!.add(pk);
   }
 
+  // Collect hashtags per member for labelling
+  const memberHashtags = new Map<string, Map<string, number>>();
+  for (const event of textNotes) {
+    const tags = getHashtags(event);
+    for (const tag of tags) {
+      if (!memberHashtags.has(event.pubkey)) memberHashtags.set(event.pubkey, new Map());
+      const m = memberHashtags.get(event.pubkey)!;
+      m.set(tag, (m.get(tag) ?? 0) + 1);
+    }
+  }
+
   // Convert to Cluster[]
   const clusters = [...langGroups.entries()]
     .filter(([, members]) => members.size >= minClusterSize)
     .sort((a, b) => b[1].size - a[1].size)
     .slice(0, maxClusters)
-    .map(([lang, members], index) => ({
-      id: `lang-${lang}`,
-      label: lang,
-      hashtags: [] as string[],
-      memberPubkeys: members,
-      color: getClusterColor(index),
-    }));
+    .map(([lang, members], index) => {
+      // Aggregate hashtag counts across cluster members
+      const tagCounts = new Map<string, number>();
+      for (const pk of members) {
+        const tags = memberHashtags.get(pk);
+        if (!tags) continue;
+        for (const [tag, count] of tags) {
+          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + count);
+        }
+      }
+      const topTags = [...tagCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag]) => tag);
+
+      return {
+        id: `lang-${lang}`,
+        label: lang,
+        hashtags: topTags.slice(0, 10),
+        memberPubkeys: members,
+        color: getClusterColor(index),
+      };
+    });
 
   return clusters;
 }
