@@ -17,6 +17,7 @@ import {
 } from "@/domain/services/cluster-strategy";
 import { primalNoteUrl, primalProfileUrl } from "@/lib/nostr-url";
 import { nip19 } from "nostr-tools";
+import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
 
 const STRATEGIES: ClusterStrategy[] = ["topic", "interaction", "language"];
 
@@ -91,14 +92,7 @@ export function ClusterOverviewPanel() {
   };
 
   return (
-    <div className="w-80 h-full bg-black/90 border-l border-[#00ff41]/15 flex flex-col overflow-hidden">
-      {/* Panel header */}
-      <div className="px-3 py-1.5 border-b border-[#00ff41]/15 bg-[#00ff41]/5">
-        <span className="font-mono text-[9px] text-[#00ff41]/50 uppercase tracking-[0.2em]">
-          cluster monitoring
-        </span>
-      </div>
-
+    <SidebarPanel title="cluster monitoring">
       {/* Strategy tabs */}
       <div className="flex items-center gap-1 p-2 border-b border-[#00ff41]/10">
         {STRATEGIES.map((s) => (
@@ -257,7 +251,7 @@ export function ClusterOverviewPanel() {
           );
         })}
       </div>
-    </div>
+    </SidebarPanel>
   );
 }
 

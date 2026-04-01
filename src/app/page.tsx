@@ -8,6 +8,7 @@ import { NodeDetailCard } from "@/presentation/components/graph/NodeDetailCard";
 import { ResetViewButton } from "@/presentation/components/graph/ResetViewButton";
 import { ClusterOverviewPanel } from "@/presentation/components/graph/ClusterOverviewPanel";
 import { TimelinePanel } from "@/presentation/components/timeline/TimelinePanel";
+import { useUIStore } from "@/store/ui-store";
 
 const UniverseGraph = dynamic(
   () =>
@@ -18,6 +19,8 @@ const UniverseGraph = dynamic(
 );
 
 export default function Home() {
+  const isTimelinePanelOpen = useUIStore((s) => s.isTimelinePanelOpen);
+
   return (
     <NostrProvider>
       <div className="relative w-screen h-screen overflow-hidden flex flex-col">
@@ -29,11 +32,10 @@ export default function Home() {
             <NodeDetailCard />
             <ResetViewButton />
           </div>
-          {/* Cluster overview — fixed right panel */}
-          <ClusterOverviewPanel />
+          {/* Right sidebar — switches between overview and timeline */}
+          {isTimelinePanelOpen ? <TimelinePanel /> : <ClusterOverviewPanel />}
         </div>
         <StatusBar />
-        <TimelinePanel />
       </div>
     </NostrProvider>
   );
