@@ -14,8 +14,8 @@ import { NOSTR_KIND } from "@/lib/nostr-kinds";
  * - "Unnamed" clusters are derived during render from store state
  * - Override clearing on strategy change is done in the event handler
  *   (ClusterOverviewPanel onClick), not during render
- * - queryFn re-checks overrides before calling API to avoid redundant requests
- *   when a prior in-flight request already named some clusters
+ * - queryFn throws on failure so React Query retries (not return null,
+ *   which would be cached as "success" with staleTime: Infinity)
  */
 export function useClusterNaming() {
   const clusters = useGraphStore((s) => s.clusters);
@@ -66,25 +66,31 @@ export function useClusterNaming() {
         body: JSON.stringify({ clusters: clusterInputs }),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        throw new Error(`Cluster naming API returned ${res.status}`);
+      }
 
       const { results } = await res.json();
-      if (!results || results.length === 0) return null;
+      if (!results || results.length === 0) {
+        throw new Error("Cluster naming API returned no results");
+      }
 
       const labelMap = new Map<string, string>();
       for (const r of results) {
         if (r.id && r.label) labelMap.set(r.id, r.label);
       }
 
-      if (labelMap.size > 0) {
-        useGraphStore.getState().setClusterLabelOverrides(labelMap);
+      if (labelMap.size === 0) {
+        throw new Error("No valid labels in LLM response");
       }
 
+      useGraphStore.getState().setClusterLabelOverrides(labelMap);
       return labelMap.size;
     },
     enabled: unnamedIds.length > 0,
-    staleTime: Infinity, // Same unnamed set = never re-fetch
+    staleTime: Infinity,
     refetchOnWindowFocus: false,
-    retry: false,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 15000),
   });
 }
