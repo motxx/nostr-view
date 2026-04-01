@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  buildClusterNamingPrompt,
+  parseClusterNamesResponse,
+  type ClusterInput,
+} from "./cluster-naming";
 
 const CLAUDE_PROXY_URL =
   process.env.CLAUDE_PROXY_URL ?? "https://claude-max-api-proxy.fly.dev";
-
-interface ClusterInput {
-  id: string;
-  currentLabel: string;
-  hashtags: string[];
-  memberCount: number;
-  sampleContent: string[];
-}
-
-interface ClusterNameResult {
-  id: string;
-  label: string;
-}
 
 export async function POST(req: Request) {
   const { clusters } = (await req.json()) as { clusters: ClusterInput[] };
@@ -23,28 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ results: [] });
   }
 
-  const clusterDescriptions = clusters
-    .map(
-      (c, i) =>
-        `Cluster ${i + 1} (id: ${c.id}):\n` +
-        `  Current label: ${c.currentLabel}\n` +
-        `  Members: ${c.memberCount}\n` +
-        `  Hashtags: ${c.hashtags.slice(0, 10).join(", ") || "(none)"}\n` +
-        `  Sample posts:\n${c.sampleContent
-          .slice(0, 3)
-          .map((s) => `    - ${s.slice(0, 150)}`)
-          .join("\n")}`,
-    )
-    .join("\n\n");
-
-  const prompt = `You are naming communities in a Nostr social network visualization.
-For each cluster below, generate a short, descriptive name (2-5 words, in the language that best fits the community).
-The name should capture the community's primary topic, culture, or identity.
-
-${clusterDescriptions}
-
-Respond with ONLY a JSON array of objects with "id" and "label" fields. No markdown, no explanation.
-Example: [{"id":"cluster-0","label":"Bitcoin Lightning Dev"},{"id":"lang-Japanese","label":"日本語Nostrコミュニティ"}]`;
+  const prompt = buildClusterNamingPrompt(clusters);
 
   try {
     const response = await fetch(`${CLAUDE_PROXY_URL}/v1/chat/completions`, {
@@ -64,15 +35,7 @@ Example: [{"id":"cluster-0","label":"Bitcoin Lightning Dev"},{"id":"lang-Japanes
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "";
-
-    // Parse JSON from response (may have surrounding whitespace)
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error("Failed to parse cluster names from LLM response:", content);
-      return NextResponse.json({ results: [] });
-    }
-
-    const results: ClusterNameResult[] = JSON.parse(jsonMatch[0]);
+    const results = parseClusterNamesResponse(content);
     return NextResponse.json({ results });
   } catch (error) {
     console.error("Cluster naming error:", error);

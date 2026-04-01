@@ -101,6 +101,7 @@ export function ClusterOverviewPanel() {
             key={s}
             onClick={() => {
               setClusterStrategy(s);
+              useGraphStore.getState().clearClusterLabelOverrides();
               useUIStore.getState().reheatSimulation();
             }}
             className={`flex-1 font-mono text-[10px] px-2 py-1.5 rounded transition-colors uppercase tracking-wider ${

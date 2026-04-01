@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useGraphStore } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
@@ -9,34 +8,25 @@ import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
 /**
  * After clusters are detected, asynchronously calls the LLM to generate
- * descriptive names. Only fires when new unnamed cluster IDs appear.
+ * descriptive names. Fires exactly once per cluster strategy.
  *
- * State management follows Dan Abramov's principles:
- *   - Named state lives in the Zustand store (clusterLabelOverrides)
- *   - "Unnamed" clusters are derived during render from store state
- *   - No module-level mutable state, no useEffect + setState
- *   - Strategy change triggers override clear during render (not via useEffect)
+ * - Named state lives in the Zustand store (clusterLabelOverrides)
+ * - "Has been named" is derived during render from store state
+ * - Override clearing on strategy change is done in the event handler
+ *   (ClusterOverviewPanel onClick), not during render
+ * - Query key uses only the strategy, so at most 1 LLM call per strategy
  */
 export function useClusterNaming() {
   const clusters = useGraphStore((s) => s.clusters);
   const overrides = useGraphStore((s) => s.clusterLabelOverrides);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
 
-  // Clear overrides when strategy changes (during render, not useEffect)
-  const prevStrategyRef = useRef(clusterStrategy);
-  if (prevStrategyRef.current !== clusterStrategy) {
-    prevStrategyRef.current = clusterStrategy;
-    useGraphStore.getState().clearClusterLabelOverrides();
-  }
-
-  // Derived during render: clusters that haven't been LLM-named yet
-  const unnamed = clusters.filter((c) => !overrides.has(c.id));
-  const unnamedKey = unnamed.map((c) => c.id).sort().join(",");
+  // Derived during render: has this strategy already been named?
+  const hasOverrides = clusters.length > 0 && clusters.some((c) => overrides.has(c.id));
 
   useQuery({
-    queryKey: ["cluster-names", clusterStrategy, unnamedKey],
+    queryKey: ["cluster-names", clusterStrategy],
     queryFn: async () => {
-      // Re-read store at fetch time to avoid stale closures
       const currentClusters = useGraphStore.getState().clusters;
       const currentOverrides = useGraphStore.getState().clusterLabelOverrides;
       const toName = currentClusters.filter((c) => !currentOverrides.has(c.id));
@@ -85,7 +75,8 @@ export function useClusterNaming() {
 
       return labelMap.size;
     },
-    enabled: unnamed.length > 0,
+    // Fire only when: clusters exist AND not yet named for this strategy
+    enabled: clusters.length > 0 && !hasOverrides,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     retry: false,

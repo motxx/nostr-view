@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useGraphStore } from "./graph-store";
+import { useGraphStore, selectLabeledClusters } from "./graph-store";
 import type { GraphNode } from "@/domain/entities/graph-node";
 import type { GraphEdge } from "@/domain/entities/graph-edge";
 import type { Cluster } from "@/domain/entities/cluster";
@@ -121,8 +121,77 @@ describe("graph-store", () => {
     });
   });
 
+  describe("clusterLabelOverrides", () => {
+    const clusters: Cluster[] = [
+      { id: "c1", label: "bitcoin", hashtags: ["bitcoin"], memberPubkeys: new Set(["a"]), color: "#f00" },
+      { id: "c2", label: "nostr", hashtags: ["nostr"], memberPubkeys: new Set(["b"]), color: "#0f0" },
+      { id: "c3", label: "Community 1", hashtags: [], memberPubkeys: new Set(["c"]), color: "#00f" },
+    ];
+
+    beforeEach(() => {
+      useGraphStore.getState().setClusters(clusters);
+    });
+
+    it("setClusterLabelOverrides merges into existing overrides", () => {
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c2", "Nostr Devs"]]));
+      const overrides = useGraphStore.getState().clusterLabelOverrides;
+      expect(overrides.get("c1")).toBe("BTC Maxis");
+      expect(overrides.get("c2")).toBe("Nostr Devs");
+    });
+
+    it("clearClusterLabelOverrides empties the map", () => {
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      useGraphStore.getState().clearClusterLabelOverrides();
+      expect(useGraphStore.getState().clusterLabelOverrides.size).toBe(0);
+    });
+
+    it("setAll does not clear clusterLabelOverrides", () => {
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      useGraphStore.getState().setAll({
+        clusters,
+        nodes: [],
+        edges: [],
+        bridges: new Map(),
+        explorationMap: null,
+      });
+      // Overrides survive setAll — this is the key invariant
+      expect(useGraphStore.getState().clusterLabelOverrides.get("c1")).toBe("BTC Maxis");
+    });
+  });
+
+  describe("selectLabeledClusters", () => {
+    const clusters: Cluster[] = [
+      { id: "c1", label: "bitcoin", hashtags: ["bitcoin"], memberPubkeys: new Set(["a"]), color: "#f00" },
+      { id: "c2", label: "nostr", hashtags: ["nostr"], memberPubkeys: new Set(["b"]), color: "#0f0" },
+    ];
+
+    it("returns clusters unchanged when no overrides", () => {
+      useGraphStore.getState().setClusters(clusters);
+      const labeled = selectLabeledClusters(useGraphStore.getState());
+      expect(labeled[0].label).toBe("bitcoin");
+      expect(labeled[1].label).toBe("nostr");
+    });
+
+    it("applies overrides to matching cluster IDs", () => {
+      useGraphStore.getState().setClusters(clusters);
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      const labeled = selectLabeledClusters(useGraphStore.getState());
+      expect(labeled[0].label).toBe("BTC Maxis");
+      expect(labeled[1].label).toBe("nostr"); // unchanged
+    });
+
+    it("does not mutate original cluster objects", () => {
+      useGraphStore.getState().setClusters(clusters);
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      selectLabeledClusters(useGraphStore.getState());
+      // Original cluster in store is unchanged
+      expect(useGraphStore.getState().clusters[0].label).toBe("bitcoin");
+    });
+  });
+
   describe("clear", () => {
-    it("resets all state", () => {
+    it("resets all state including overrides", () => {
       useGraphStore.getState().setGraphData(
         [{ id: "a", influenceScore: 0, noteCount: 0, followerCount: 0, reactionCount: 0, repostCount: 0 }],
         [],
@@ -135,11 +204,13 @@ describe("graph-store", () => {
         coverage: 1,
         recommendations: [],
       });
+      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "Test"]]));
       useGraphStore.getState().clear();
       expect(useGraphStore.getState().nodes).toHaveLength(0);
       expect(useGraphStore.getState().edges).toHaveLength(0);
       expect(useGraphStore.getState().bridges.size).toBe(0);
       expect(useGraphStore.getState().explorationMap).toBeNull();
+      expect(useGraphStore.getState().clusterLabelOverrides.size).toBe(0);
       expect(useGraphStore.getState().lastUpdated).toBe(0);
     });
   });
