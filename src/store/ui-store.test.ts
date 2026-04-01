@@ -12,6 +12,8 @@ describe("ui-store", () => {
       flyToClusterFn: null,
       reheatSimulationFn: null,
       isCameraMoved: false,
+      timeRange: null,
+      isLive: true,
     });
   });
 
@@ -105,6 +107,37 @@ describe("ui-store", () => {
 
     it("does not throw when no fn registered", () => {
       expect(() => useUIStore.getState().reheatSimulation()).not.toThrow();
+    });
+  });
+
+  describe("timeRange / isLive", () => {
+    it("starts in live mode with null timeRange", () => {
+      const s = useUIStore.getState();
+      expect(s.timeRange).toBeNull();
+      expect(s.isLive).toBe(true);
+    });
+
+    it("setTimeRange sets range and disables live", () => {
+      useUIStore.getState().setTimeRange([1000, 2000]);
+      const s = useUIStore.getState();
+      expect(s.timeRange).toEqual([1000, 2000]);
+      expect(s.isLive).toBe(false);
+    });
+
+    it("setTimeRange(null) re-enables live", () => {
+      useUIStore.getState().setTimeRange([1000, 2000]);
+      useUIStore.getState().setTimeRange(null);
+      const s = useUIStore.getState();
+      expect(s.timeRange).toBeNull();
+      expect(s.isLive).toBe(true);
+    });
+
+    it("goLive clears timeRange and enables live", () => {
+      useUIStore.getState().setTimeRange([1000, 2000]);
+      useUIStore.getState().goLive();
+      const s = useUIStore.getState();
+      expect(s.timeRange).toBeNull();
+      expect(s.isLive).toBe(true);
     });
   });
 });

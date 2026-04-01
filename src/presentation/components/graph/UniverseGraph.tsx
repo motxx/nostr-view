@@ -22,9 +22,11 @@ import {
   influenceToSize,
   assignTiers,
   pulsePeriod,
+  tierBrightness,
   DEFAULT_TIER,
   type NodeTier,
 } from "@/lib/graph-utils";
+import { flashBoost } from "@/lib/flash-decay";
 import { computeClusterCentroid } from "@/lib/nebula-manager";
 import {
   spawnParticles,
@@ -44,6 +46,7 @@ interface GraphNodeData extends SimulationNode {
   clusterId?: string;
   clusterColor?: string;
   tier: NodeTier;
+  isUnexplored?: boolean;
 }
 
 interface GraphLinkData extends SimulationLink<GraphNodeData> {
@@ -114,13 +117,25 @@ function GlowSprite({
   // Pulse animation via useFrame (replaces onBeforeRender hack)
   useFrame(() => {
     if (!nodeId || !ref.current) return;
-    const lastPost = useActivityStore.getState().lastPostTime.get(nodeId);
-    if (!lastPost) return;
+    const activityState = useActivityStore.getState();
+
+    // Flash boost: bright burst on new event arrival
+    const flashTs = activityState.flashTimestamps.get(nodeId);
+    const flash = flashTs ? flashBoost(Date.now() - flashTs, 1000) : 1;
+
+    const lastPost = activityState.lastPostTime.get(nodeId);
+    if (!lastPost) {
+      if (flash > 1) ref.current.scale.set(baseSize * flash, baseSize * flash, 1);
+      return;
+    }
     const now = Date.now() / 1000;
     const period = pulsePeriod(lastPost, now);
-    if (period === 0) return;
+    if (period === 0) {
+      if (flash > 1) ref.current.scale.set(baseSize * flash, baseSize * flash, 1);
+      return;
+    }
     const s = 1 + Math.sin(((now % period) / period) * Math.PI * 2) * 0.2;
-    ref.current.scale.set(baseSize * s, baseSize * s, 1);
+    ref.current.scale.set(baseSize * s * flash, baseSize * s * flash, 1);
   });
 
   return (
@@ -146,6 +161,11 @@ function AvatarSphere({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const threeColor = useMemo(() => new THREE.Color(color), [color]);
+  // Brighter emissive for fallback so avatar sphere is visible without lighting
+  const emissiveColor = useMemo(
+    () => new THREE.Color(color).multiplyScalar(0.4),
+    [color],
+  );
 
   // Load avatar texture asynchronously, swap material on success
   useEffect(() => {
@@ -168,7 +188,15 @@ function AvatarSphere({
   return (
     <mesh ref={meshRef}>
       <sphereGeometry args={[radius, 32, 32]} />
-      <meshBasicMaterial color={threeColor} transparent opacity={0.9} />
+      <meshStandardMaterial
+        color={threeColor}
+        emissive={emissiveColor}
+        emissiveIntensity={1.5}
+        transparent
+        opacity={0.95}
+        roughness={0.3}
+        metalness={0.1}
+      />
     </mesh>
   );
 }
@@ -200,6 +228,8 @@ function LabelSprite({
 }
 
 function OrbitRing({ radius, color }: { radius: number; color: string }) {
+  const groupRef = useRef<THREE.Group>(null);
+
   const geom = useMemo(() => {
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= 64; i++) {
@@ -209,13 +239,32 @@ function OrbitRing({ radius, color }: { radius: number; color: string }) {
     return new THREE.BufferGeometry().setFromPoints(pts);
   }, [radius]);
 
+  // Random initial tilt so rings aren't all flat on XZ plane
+  const tilt = useMemo(
+    () => new THREE.Euler(
+      Math.random() * Math.PI * 0.6 - 0.3,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 0.4 - 0.2,
+    ),
+    [],
+  );
+
+  // Slow rotation
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += delta * 0.15;
+    }
+  });
+
   return (
-    <primitive object={new THREE.Line(geom, new THREE.LineBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending,
-    }))} />
+    <group ref={groupRef} rotation={tilt}>
+      <primitive object={new THREE.Line(geom, new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+      }))} />
+    </group>
   );
 }
 
@@ -229,9 +278,12 @@ function GraphNode({
   onHover: (id: string | null) => void;
 }) {
   const score = node.influenceScore;
-  const color = influenceToColor(score, node.clusterColor);
-  const size = influenceToSize(score);
+  const rawColor = influenceToColor(score, node.clusterColor);
   const tier = node.tier;
+  // Fix 2: Tier-based brightness — stars brighter, dust darker
+  const color = tierBrightness(rawColor, tier);
+  const size = influenceToSize(score);
+  const dimFactor = node.isUnexplored ? 0.3 : 1;
 
   const handleClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
@@ -257,23 +309,32 @@ function GraphNode({
         <>
           <AvatarSphere radius={size * 0.5} color={color} pictureUrl={node.picture} />
           <OrbitRing radius={size * 1.2} color={color} />
-          <GlowSprite color={color} size={size * 3.5} nodeId={node.id} />
-          {node.name && <LabelSprite text={node.name} size={size} alpha={0.8} />}
+          <GlowSprite color={color} size={size * 3.5 * dimFactor} nodeId={node.id} />
+          {node.name && <LabelSprite text={node.name} size={size} alpha={0.8 * dimFactor} />}
         </>
       )}
       {tier === "planet" && (
         <>
           <AvatarSphere radius={size * 0.4} color={color} pictureUrl={node.picture} />
-          <GlowSprite color={color} size={size * 2.5} nodeId={node.id} />
-          {node.name && <LabelSprite text={node.name} size={size} alpha={0.6} />}
+          <GlowSprite color={color} size={size * 2.5 * dimFactor} nodeId={node.id} />
+          {node.name && <LabelSprite text={node.name} size={size} alpha={0.6 * dimFactor} />}
         </>
       )}
+      {/* Fix 1: Dust — show tiny avatar + mini label for identifiable nodes */}
       {tier === "dust" && (
-        <GlowSprite
-          color={color}
-          size={Math.max(2, size * 0.6) * 1.5}
-          nodeId={node.id}
-        />
+        <>
+          {node.picture && (
+            <AvatarSphere radius={Math.max(1.2, size * 0.25)} color={color} pictureUrl={node.picture} />
+          )}
+          <GlowSprite
+            color={color}
+            size={Math.max(2.5, size * 0.8) * 1.5 * dimFactor}
+            nodeId={node.id}
+          />
+          {node.name && (
+            <LabelSprite text={node.name} size={Math.max(2, size * 0.6)} alpha={0.35 * dimFactor} />
+          )}
+        </>
       )}
     </group>
   );
@@ -415,6 +476,7 @@ function EdgeParticles({ simState }: { simState: React.RefObject<SimState | null
   // Particle pool — mutable, not React state
   const poolRef = useRef<Particle[]>([]);
   const spawnTimerRef = useRef(0);
+  const flashTimerRef = useRef(0);
 
   // Build edge endpoints list for spawnParticles (derived from sim links)
   const edgesRef = useRef<EdgeEndpoints[]>([]);
@@ -454,6 +516,25 @@ function EdgeParticles({ simState }: { simState: React.RefObject<SimState | null
       }
     } else {
       spawnTimerRef.current = 0;
+    }
+
+    // ── Flash-triggered particles (subdued, lower frequency) ──
+    flashTimerRef.current += delta;
+    if (flashTimerRef.current > 0.3) {
+      flashTimerRef.current = 0;
+      const flashQueue = useActivityStore.getState().flashQueue;
+      for (const pk of flashQueue) {
+        if (pk === activeId) continue; // already handled above
+        if (Math.random() > 0.3) continue; // 30% chance
+        const spawned = spawnParticles(
+          edgesRef.current,
+          pk,
+          pool,
+          MAX_PARTICLES,
+          () => Math.random(),
+        );
+        pool.push(...spawned);
+      }
     }
 
     // ── Advance particles and write positions ──
@@ -529,6 +610,18 @@ function ForceGraphScene() {
     return map;
   }, [clusters]);
 
+  const explorationMap = useGraphStore((s) => s.explorationMap);
+
+  // Set of unexplored cluster IDs
+  const unexploredClusterIds = useMemo(() => {
+    if (!explorationMap) return new Set<string>();
+    const set = new Set<string>();
+    for (const [id, dist] of explorationMap.reachability) {
+      if (dist === Infinity) set.add(id);
+    }
+    return set;
+  }, [explorationMap]);
+
   // Build graph data for simulation
   const graphNodes: GraphNodeData[] = useMemo(
     () =>
@@ -540,8 +633,9 @@ function ForceGraphScene() {
         clusterId: n.clusterId,
         clusterColor: n.clusterId ? clusterColorMap.get(n.clusterId) : undefined,
         tier: tierMap.get(n.id) ?? DEFAULT_TIER,
+        isUnexplored: n.clusterId ? unexploredClusterIds.has(n.clusterId) : false,
       })),
-    [nodes, tierMap, clusterColorMap],
+    [nodes, tierMap, clusterColorMap, unexploredClusterIds],
   );
 
   const graphLinks: GraphLinkData[] = useMemo(
@@ -609,6 +703,8 @@ function ForceGraphScene() {
         ref.position.set(node.x ?? 0, node.y ?? 0, node.z ?? 0);
       }
     }
+    // Clear expired flash entries
+    useActivityStore.getState().clearExpiredFlashes(Date.now());
   });
 
   // Register UI callbacks — done in useFrame's first tick (not during render)
@@ -716,6 +812,7 @@ export function UniverseGraph() {
         style={{ background: "#000008" }}
       >
         <fog attach="fog" args={[0x000008, 100, 2000]} />
+        <ambientLight intensity={0.6} />
         <Stars radius={1500} depth={50} count={2000} factor={4} fade speed={0.5} />
         <OrbitControls enableDamping dampingFactor={0.1} />
         <ForceGraphScene />

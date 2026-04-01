@@ -6,7 +6,6 @@ import { useUIStore } from "@/store/ui-store";
 import { useEventStore } from "@/store/event-store";
 import {
   findRepresentativeNotes,
-  computeBridges,
   findUserCluster,
   clusterConnectivity,
   type BridgeInfo,
@@ -33,9 +32,11 @@ export function ClusterOverviewPanel() {
 
   const [pubkeyInput, setPubkeyInput] = useState("");
 
+  const bridges = useGraphStore((s) => s.bridges);
+  const explorationMap = useGraphStore((s) => s.explorationMap);
+
   const allEvents = useMemo(() => [...eventsById.values()], [eventsById]);
 
-  const bridges = useMemo(() => computeBridges(clusters), [clusters]);
   const connectivity = useMemo(
     () => clusterConnectivity(bridges),
     [bridges],
@@ -167,6 +168,76 @@ export function ClusterOverviewPanel() {
         )}
       </div>
 
+      {/* Coverage bar + recommendations (Feature 2) */}
+      {explorationMap && (
+        <div className="px-3 py-2 border-b border-[#00ff41]/10">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-mono text-[9px] text-[#0ff]/30 uppercase tracking-[0.2em]">
+              network coverage
+            </span>
+            <span className="font-mono text-[10px] text-[#00ff41]/70 tabular-nums">
+              {Math.round(explorationMap.coverage * 100)}%
+            </span>
+          </div>
+          <div className="h-1 bg-[#00ff41]/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#00ff41]/50 rounded-full transition-all duration-500"
+              style={{ width: `${explorationMap.coverage * 100}%` }}
+            />
+          </div>
+          {explorationMap.recommendations.length > 0 && (
+            <div className="mt-2">
+              <span className="font-mono text-[8px] text-[#0ff]/25 uppercase tracking-[0.2em]">
+                follow recommendations
+              </span>
+              {explorationMap.recommendations.slice(0, 3).map((rec) => {
+                const profile = profiles.get(rec.bridgePubkey);
+                const name =
+                  profile?.displayName ||
+                  profile?.name ||
+                  rec.bridgePubkey.slice(0, 8) + "…";
+                const targetCluster = clusters.find(
+                  (c) => c.id === rec.targetClusterId,
+                );
+                return (
+                  <div
+                    key={rec.targetClusterId}
+                    className="flex items-center gap-1.5 mt-1"
+                  >
+                    <a
+                      href={primalProfileUrl(rec.bridgePubkey)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 bg-[#00ff41]/[0.03] hover:bg-[#00ff41]/[0.08] border border-[#00ff41]/5 rounded px-1.5 py-0.5 transition-colors"
+                    >
+                      {profile?.picture && (
+                        <img
+                          src={profile.picture}
+                          alt=""
+                          className="w-3 h-3 rounded object-cover"
+                        />
+                      )}
+                      <span className="font-mono text-[9px] text-[#00ff41]/50">
+                        {name}
+                      </span>
+                    </a>
+                    <span className="font-mono text-[9px] text-white/20">→</span>
+                    {targetCluster && (
+                      <span
+                        className="font-mono text-[9px]"
+                        style={{ color: targetCluster.color }}
+                      >
+                        {targetCluster.label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Cluster list */}
       <div className="flex-1 overflow-y-auto osint-scroll">
         {summaries.length === 0 && (
@@ -177,6 +248,8 @@ export function ClusterOverviewPanel() {
 
         {summaries.map(({ cluster, notes, bridges: clusterBridges }) => {
           const isMyCluster = myCluster?.id === cluster.id;
+          const isUnexplored =
+            explorationMap?.reachability.get(cluster.id) === Infinity;
 
           return (
             <div
@@ -203,6 +276,11 @@ export function ClusterOverviewPanel() {
                 {isMyCluster && (
                   <span className="font-mono text-[8px] text-[#00ff41]/60 shrink-0 border border-[#00ff41]/20 rounded px-1 uppercase">
                     opr
+                  </span>
+                )}
+                {isUnexplored && (
+                  <span className="font-mono text-[8px] text-red-400/80 shrink-0 border border-red-400/30 rounded px-1 uppercase">
+                    unexplored
                   </span>
                 )}
                 <span className="font-mono text-[10px] text-white/20 ml-auto shrink-0 tabular-nums">

@@ -86,6 +86,8 @@ export function useNostrEvents() {
           useActivityStore
             .getState()
             .updateActivity(event.pubkey, event.created_at);
+          useActivityStore.getState().addFlash(event.pubkey);
+          useActivityStore.getState().recordEventArrival();
         }
       },
       () => useEventStore.getState().setConnectionStatus("connected"),

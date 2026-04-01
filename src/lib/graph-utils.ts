@@ -271,6 +271,28 @@ export function influenceToColor(score: number, baseColor?: string): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
+/**
+ * Adjust color brightness by tier so nodes within the same cluster
+ * are visually distinguishable beyond just size.
+ *
+ * Star: +30% lighter, Planet: unchanged, Dust: -35% darker
+ */
+export function tierBrightness(hexColor: string, tier: NodeTier): string {
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+
+  let factor: number;
+  switch (tier) {
+    case "star":   factor = 1.3;  break;
+    case "planet": factor = 1.0;  break;
+    case "dust":   factor = 0.65; break;
+  }
+
+  const clamp = (v: number) => Math.min(255, Math.round(v * factor));
+  return `#${clamp(r).toString(16).padStart(2, "0")}${clamp(g).toString(16).padStart(2, "0")}${clamp(b).toString(16).padStart(2, "0")}`;
+}
+
 /* ── Pulse helpers ── */
 
 /**

@@ -4,6 +4,7 @@ import {
   influenceToSize,
   influenceToColor,
   pulsePeriod,
+  tierBrightness,
 } from "./graph-utils";
 
 describe("assignTiers", () => {
@@ -100,5 +101,41 @@ describe("pulsePeriod", () => {
     const now = 10000;
     // 1 hour ago → 3s (midpoint)
     expect(pulsePeriod(now - 3600, now)).toBeCloseTo(3);
+  });
+});
+
+describe("tierBrightness", () => {
+  it("returns a valid hex color", () => {
+    expect(tierBrightness("#4fc3f7", "star")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tierBrightness("#4fc3f7", "planet")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tierBrightness("#4fc3f7", "dust")).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("star is brighter than planet", () => {
+    const base = "#808080";
+    const star = tierBrightness(base, "star");
+    const planet = tierBrightness(base, "planet");
+    // Compare green channel (chars 3-5)
+    expect(parseInt(star.slice(3, 5), 16)).toBeGreaterThan(
+      parseInt(planet.slice(3, 5), 16),
+    );
+  });
+
+  it("planet is unchanged from input", () => {
+    expect(tierBrightness("#808080", "planet")).toBe("#808080");
+  });
+
+  it("dust is darker than planet", () => {
+    const base = "#808080";
+    const planet = tierBrightness(base, "planet");
+    const dust = tierBrightness(base, "dust");
+    expect(parseInt(dust.slice(3, 5), 16)).toBeLessThan(
+      parseInt(planet.slice(3, 5), 16),
+    );
+  });
+
+  it("clamps to 255 for bright inputs", () => {
+    const result = tierBrightness("#ffffff", "star");
+    expect(result).toBe("#ffffff");
   });
 });

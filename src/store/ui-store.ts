@@ -20,6 +20,11 @@ interface UIStore {
   /** True when camera has moved from the default overview position */
   isCameraMoved: boolean;
 
+  /** Time range filter [start, end] in unix seconds; null = live (no filter) */
+  timeRange: [number, number] | null;
+  /** True when in live mode (following real-time) */
+  isLive: boolean;
+
   selectCluster: (clusterId: string | null) => void;
   selectNode: (nodeId: string | null) => void;
   setTimelinePanelOpen: (open: boolean) => void;
@@ -32,6 +37,8 @@ interface UIStore {
   setClusterStrategy: (strategy: ClusterStrategy) => void;
   setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
+  setTimeRange: (range: [number, number] | null) => void;
+  goLive: () => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -45,6 +52,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   flyToClusterFn: null,
   reheatSimulationFn: null,
   isCameraMoved: false,
+  timeRange: null,
+  isLive: true,
 
   selectCluster: (clusterId) =>
     set({
@@ -95,4 +104,9 @@ export const useUIStore = create<UIStore>((set, get) => ({
       isCameraMoved: false,
     });
   },
+
+  setTimeRange: (range) =>
+    set({ timeRange: range, isLive: range === null }),
+
+  goLive: () => set({ timeRange: null, isLive: true }),
 }));
