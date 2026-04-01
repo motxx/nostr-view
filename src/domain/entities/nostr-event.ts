@@ -14,6 +14,14 @@ export function getHashtags(event: NostrEvent): string[] {
     .map((tag) => tag[1].toLowerCase());
 }
 
+export function filterByHashtag(
+  events: NostrEvent[],
+  tag: string | null,
+): NostrEvent[] {
+  if (!tag) return events;
+  return events.filter((e) => getHashtags(e).includes(tag));
+}
+
 export function getReferencedPubkeys(event: NostrEvent): string[] {
   return event.tags
     .filter((tag) => tag[0] === "p")

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useClusterTimeline } from "@/presentation/hooks/useClusterDetection";
 import { useActivityStore } from "@/store/activity-store";
+import { filterByHashtag } from "@/domain/entities/nostr-event";
 import { NoteCard } from "./NoteCard";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,6 +24,7 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
   const { events, cluster, profiles } = useClusterTimeline(clusterId);
   const lastPostTime = useActivityStore((s) => s.lastPostTime);
   const nowSec = useSyncExternalStore(subscribeNowSec, getNowSec, getNowSec);
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const activeCount = useMemo(() => {
     if (!cluster) return 0;
@@ -34,6 +36,15 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
     }
     return count;
   }, [cluster, lastPostTime, nowSec]);
+
+  const filteredEvents = useMemo(
+    () => filterByHashtag(events, filterTag),
+    [events, filterTag],
+  );
+
+  const handleTagClick = (tag: string) => {
+    setFilterTag((prev) => (prev === tag ? null : tag));
+  };
 
   if (!cluster) {
     return (
@@ -55,16 +66,24 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
           {cluster.label}
         </h2>
         <div className="flex flex-wrap gap-1 mt-2">
-          {cluster.hashtags.slice(0, 5).map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="font-mono text-[10px] bg-[#00ff41]/5 border-[#00ff41]/15 text-[#00ff41]/50"
-              style={{ borderColor: cluster.color + "40" }}
-            >
-              #{tag}
-            </Badge>
-          ))}
+          {cluster.hashtags.slice(0, 5).map((tag) => {
+            const isActive = filterTag === tag;
+            return (
+              <button key={tag} onClick={() => handleTagClick(tag)}>
+                <Badge
+                  variant="secondary"
+                  className={`font-mono text-[10px] cursor-pointer transition-colors ${
+                    isActive
+                      ? "bg-[#00ff41]/20 text-[#00ff41] border-[#00ff41]/40"
+                      : "bg-[#00ff41]/5 border-[#00ff41]/15 text-[#00ff41]/50 hover:bg-[#00ff41]/10 hover:text-[#00ff41]/70"
+                  }`}
+                  style={{ borderColor: isActive ? undefined : cluster.color + "40" }}
+                >
+                  #{tag}
+                </Badge>
+              </button>
+            );
+          })}
         </div>
         <div className="flex gap-3 font-mono text-[10px] text-[#0ff]/30 mt-2 uppercase">
           <span>{cluster.memberPubkeys.size} subjects</span>
@@ -73,20 +92,24 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
           >
             {activeCount} active
           </span>
-          <span>{events.length} signals</span>
+          <span>
+            {filterTag
+              ? `${filteredEvents.length}/${events.length} signals`
+              : `${events.length} signals`}
+          </span>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto osint-scroll px-3 py-2 space-y-2">
-        {events.map((event) => (
+        {filteredEvents.map((event) => (
           <NoteCard
             key={event.id}
             event={event}
             profile={profiles?.get(event.pubkey)}
           />
         ))}
-        {events.length === 0 && (
+        {filteredEvents.length === 0 && (
           <p className="font-mono text-[10px] text-[#00ff41]/20 text-center py-8 uppercase tracking-wider">
-            No signals intercepted
+            {filterTag ? "No signals match filter" : "No signals intercepted"}
           </p>
         )}
       </div>

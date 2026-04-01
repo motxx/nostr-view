@@ -3,6 +3,7 @@ import {
   getHashtags,
   getReferencedPubkeys,
   getReferencedEventIds,
+  filterByHashtag,
   type NostrEvent,
 } from "./nostr-event";
 
@@ -33,6 +34,42 @@ describe("getHashtags", () => {
 
   it("returns empty array when no t-tags", () => {
     expect(getHashtags(makeEvent())).toEqual([]);
+  });
+});
+
+describe("filterByHashtag", () => {
+  const evBitcoin = makeEvent({
+    id: "ev-btc",
+    tags: [["t", "bitcoin"]],
+  });
+  const evNostr = makeEvent({
+    id: "ev-nostr",
+    tags: [["t", "nostr"]],
+  });
+  const evBoth = makeEvent({
+    id: "ev-both",
+    tags: [
+      ["t", "bitcoin"],
+      ["t", "nostr"],
+    ],
+  });
+  const evNone = makeEvent({ id: "ev-none" });
+  const all = [evBitcoin, evNostr, evBoth, evNone];
+
+  it("returns all events when tag is null", () => {
+    expect(filterByHashtag(all, null)).toBe(all);
+  });
+
+  it("filters to events containing the tag", () => {
+    expect(filterByHashtag(all, "bitcoin")).toEqual([evBitcoin, evBoth]);
+  });
+
+  it("returns empty array when no events match", () => {
+    expect(filterByHashtag(all, "lightning")).toEqual([]);
+  });
+
+  it("handles empty event list", () => {
+    expect(filterByHashtag([], "bitcoin")).toEqual([]);
   });
 });
 
