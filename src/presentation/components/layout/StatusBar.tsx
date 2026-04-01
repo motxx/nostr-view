@@ -1,26 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { useEventStore } from "@/store/event-store";
 import { useGraphStore } from "@/store/graph-store";
 import { useActivityStore } from "@/store/activity-store";
 import { useUIStore } from "@/store/ui-store";
-
-/** Provides current time (unix seconds) that ticks every 30 seconds. */
-let _sbNowSec = Math.floor(Date.now() / 1000);
-const _sbListeners = new Set<() => void>();
-if (typeof window !== "undefined") {
-  setInterval(() => {
-    _sbNowSec = Math.floor(Date.now() / 1000);
-    for (const l of _sbListeners) l();
-  }, 30_000);
-}
-function sbSubscribe(cb: () => void) {
-  _sbListeners.add(cb);
-  return () => { _sbListeners.delete(cb); };
-}
-function sbGetSnapshot() { return _sbNowSec; }
-function sbGetServerSnapshot() { return 0; }
+import { useNowSec } from "@/lib/use-now-sec";
+import { formatTimeOffset } from "@/lib/time-format";
 
 export function StatusBar() {
   const connectionStatus = useEventStore((s) => s.connectionStatus);
@@ -32,15 +17,10 @@ export function StatusBar() {
   const isLive = useUIStore((s) => s.isLive);
   const timeRange = useUIStore((s) => s.timeRange);
 
-  // Subscribe to periodic ticks for time label updates
-  const nowSec = useSyncExternalStore(sbSubscribe, sbGetSnapshot, sbGetServerSnapshot);
-  const timeLabel = (() => {
-    if (isLive || !timeRange) return "LIVE";
-    const diffMin = Math.round((nowSec - timeRange[1]) / 60);
-    if (diffMin <= 0) return "LIVE";
-    if (diffMin < 60) return `-${diffMin}m`;
-    return `-${Math.floor(diffMin / 60)}h${diffMin % 60}m`;
-  })();
+  const nowSec = useNowSec();
+  const timeLabel = isLive || !timeRange
+    ? "LIVE"
+    : formatTimeOffset(nowSec, timeRange[1]);
 
   const isConnected = connectionStatus === "connected";
   const statusColor = isConnected

@@ -5,7 +5,10 @@ import {
   influenceToColor,
   pulsePeriod,
   tierBrightness,
-} from "./graph-utils";
+  isEdgeActive,
+  isNodeHighlighted,
+  type EdgeActiveContext,
+} from "./graph-math";
 
 describe("assignTiers", () => {
   it("assigns hub to top 10 nodes", () => {
@@ -137,5 +140,98 @@ describe("tierBrightness", () => {
   it("clamps to 255 for bright inputs", () => {
     const result = tierBrightness("#ffffff", "hub");
     expect(result).toBe("#ffffff");
+  });
+});
+
+describe("isEdgeActive", () => {
+  it("activates edge when both endpoints are in connected set and one is activeNodeId", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: new Set(["A", "B", "C"]),
+      activeNodeId: "A",
+      clusterMemberSet: null,
+    };
+    const result = isEdgeActive("A", "B", ctx);
+    expect(result.isActive).toBe(true);
+    expect(result.isClusterEdge).toBe(false);
+  });
+
+  it("does not activate edge when neither endpoint is activeNodeId", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: new Set(["A", "B", "C"]),
+      activeNodeId: "A",
+      clusterMemberSet: null,
+    };
+    const result = isEdgeActive("B", "C", ctx);
+    expect(result.isActive).toBe(false);
+  });
+
+  it("does not activate edge when endpoint is not in connected set", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: new Set(["A", "B"]),
+      activeNodeId: "A",
+      clusterMemberSet: null,
+    };
+    const result = isEdgeActive("A", "D", ctx);
+    expect(result.isActive).toBe(false);
+  });
+
+  it("activates cluster edge when both endpoints are cluster members and no node active", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: null,
+      activeNodeId: null,
+      clusterMemberSet: new Set(["X", "Y", "Z"]),
+    };
+    const result = isEdgeActive("X", "Y", ctx);
+    expect(result.isActive).toBe(true);
+    expect(result.isClusterEdge).toBe(true);
+  });
+
+  it("does not activate cluster edge when one endpoint is not a member", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: null,
+      activeNodeId: null,
+      clusterMemberSet: new Set(["X", "Y"]),
+    };
+    const result = isEdgeActive("X", "W", ctx);
+    expect(result.isActive).toBe(false);
+  });
+
+  it("prefers node-level edge over cluster edge when both apply", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: new Set(["A", "B"]),
+      activeNodeId: "A",
+      clusterMemberSet: new Set(["A", "B"]),
+    };
+    const result = isEdgeActive("A", "B", ctx);
+    expect(result.isActive).toBe(true);
+    expect(result.isClusterEdge).toBe(false);
+  });
+
+  it("returns inactive when no context is set", () => {
+    const ctx: EdgeActiveContext = {
+      connectedSet: null,
+      activeNodeId: null,
+      clusterMemberSet: null,
+    };
+    const result = isEdgeActive("A", "B", ctx);
+    expect(result.isActive).toBe(false);
+    expect(result.isClusterEdge).toBe(false);
+  });
+});
+
+describe("isNodeHighlighted", () => {
+  it("highlights all nodes when no cluster is selected", () => {
+    expect(isNodeHighlighted("any", null)).toBe(true);
+  });
+
+  it("highlights nodes that are cluster members", () => {
+    const members = new Set(["A", "B"]);
+    expect(isNodeHighlighted("A", members)).toBe(true);
+    expect(isNodeHighlighted("B", members)).toBe(true);
+  });
+
+  it("dims nodes that are not cluster members", () => {
+    const members = new Set(["A", "B"]);
+    expect(isNodeHighlighted("C", members)).toBe(false);
   });
 });

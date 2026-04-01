@@ -1,20 +1,12 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { useClusterTimeline } from "@/presentation/hooks/useClusterDetection";
 import { useActivityStore } from "@/store/activity-store";
 import { filterByHashtag } from "@/domain/entities/nostr-event";
 import { NoteCard } from "./NoteCard";
 import { Badge } from "@/components/ui/badge";
-
-/** Current unix seconds, ticks every 30s (sufficient for "active within 2h") */
-function subscribeNowSec(cb: () => void) {
-  const id = setInterval(cb, 30_000);
-  return () => clearInterval(id);
-}
-function getNowSec() {
-  return Math.floor(Date.now() / 1000);
-}
+import { useNowSec } from "@/lib/use-now-sec";
 
 interface ClusterTimelineProps {
   clusterId: string | null;
@@ -23,7 +15,7 @@ interface ClusterTimelineProps {
 export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
   const { events, cluster, profiles } = useClusterTimeline(clusterId);
   const lastPostTime = useActivityStore((s) => s.lastPostTime);
-  const nowSec = useSyncExternalStore(subscribeNowSec, getNowSec, getNowSec);
+  const nowSec = useNowSec();
   const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const activeCount = useMemo(() => {

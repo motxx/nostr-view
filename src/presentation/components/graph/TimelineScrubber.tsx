@@ -1,29 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useCallback, useSyncExternalStore } from "react";
+import { useMemo, useRef, useCallback } from "react";
 import { useEventStore } from "@/store/event-store";
 import { useUIStore } from "@/store/ui-store";
 import { computeHistogram, type HistogramBucket } from "@/lib/event-histogram";
+import { useNowSec } from "@/lib/use-now-sec";
+import { formatTimeOffset } from "@/lib/time-format";
 
 const WINDOW_HOURS = 2;
 const WINDOW_SEC = WINDOW_HOURS * 60 * 60;
 const BUCKET_SIZE_SEC = 300; // 5 minutes
-
-/** Provides current time (unix seconds) that ticks every 30 seconds. */
-let _nowSec = Math.floor(Date.now() / 1000);
-const _listeners = new Set<() => void>();
-if (typeof window !== "undefined") {
-  setInterval(() => {
-    _nowSec = Math.floor(Date.now() / 1000);
-    for (const l of _listeners) l();
-  }, 30_000);
-}
-function subscribeNow(cb: () => void) {
-  _listeners.add(cb);
-  return () => { _listeners.delete(cb); };
-}
-function getNowSnapshot() { return _nowSec; }
-function getNowServerSnapshot() { return 0; }
 
 export function TimelineScrubber() {
   const eventsById = useEventStore((s) => s.eventsById);
@@ -32,8 +18,7 @@ export function TimelineScrubber() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Subscribe to periodic ticks so nowSec refreshes
-  const nowSec = useSyncExternalStore(subscribeNow, getNowSnapshot, getNowServerSnapshot);
+  const nowSec = useNowSec();
   const windowStart = nowSec - WINDOW_SEC;
 
   const allEvents = useMemo(() => [...eventsById.values()], [eventsById]);
@@ -83,15 +68,10 @@ export function TimelineScrubber() {
     useUIStore.getState().goLive();
   }, []);
 
-  // Time label for current position
-  const timeLabel = useMemo(() => {
-    if (isLive) return "LIVE";
-    if (!timeRange) return "LIVE";
-    const diffMin = Math.round((nowSec - timeRange[1]) / 60);
-    if (diffMin <= 0) return "LIVE";
-    if (diffMin < 60) return `-${diffMin}m`;
-    return `-${Math.round(diffMin / 60)}h${diffMin % 60}m`;
-  }, [isLive, timeRange, nowSec]);
+  const timeLabel = useMemo(
+    () => isLive || !timeRange ? "LIVE" : formatTimeOffset(nowSec, timeRange[1]),
+    [isLive, timeRange, nowSec],
+  );
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">

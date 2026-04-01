@@ -33,32 +33,33 @@ export function useGraphData() {
         : allEvents;
 
       const clusters = detectClustersByStrategy(events, strategy);
-      useGraphStore.getState().setClusters(clusters);
-
       const { nodes, edges } = buildGraph(events, profiles, clusters);
-      useGraphStore.getState().setGraphData(nodes, edges);
 
       // Compute bridges and exploration map (Feature 2)
       const bridges = computeBridges(clusters);
-      useGraphStore.getState().setBridges(bridges);
 
+      let explorationMap: import("@/domain/services/exploration-map").ExplorationMap | null = null;
       const myPubkey = useUIStore.getState().myPubkey;
       if (myPubkey) {
         const myCluster = findUserCluster(myPubkey, clusters);
         if (myCluster) {
           const clusterIds = clusters.map((c) => c.id);
-          const explorationMap = computeExplorationMap(
+          explorationMap = computeExplorationMap(
             myCluster.id,
             clusterIds,
             bridges,
           );
-          useGraphStore.getState().setExplorationMap(explorationMap);
-        } else {
-          useGraphStore.getState().setExplorationMap(null);
         }
-      } else {
-        useGraphStore.getState().setExplorationMap(null);
       }
+
+      // Single batch update — avoids intermediate re-renders
+      useGraphStore.getState().setAll({
+        clusters,
+        nodes,
+        edges,
+        bridges,
+        explorationMap,
+      });
 
       return events.length;
     },

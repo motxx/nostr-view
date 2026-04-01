@@ -17,6 +17,13 @@ interface GraphStore {
   setClusters: (clusters: Cluster[]) => void;
   setBridges: (bridges: Map<string, BridgeInfo[]>) => void;
   setExplorationMap: (map: ExplorationMap | null) => void;
+  setAll: (data: {
+    clusters: Cluster[];
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+    bridges: Map<string, BridgeInfo[]>;
+    explorationMap: ExplorationMap | null;
+  }) => void;
   clear: () => void;
 }
 
@@ -34,6 +41,8 @@ export const useGraphStore = create<GraphStore>((set) => ({
   setClusters: (clusters) => set({ clusters }),
   setBridges: (bridges) => set({ bridges }),
   setExplorationMap: (map) => set({ explorationMap: map }),
+
+  setAll: (data) => set({ ...data, lastUpdated: Date.now() }),
 
   clear: () =>
     set({
