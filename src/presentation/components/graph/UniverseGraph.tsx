@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useMemo, useState } from "react";
+import { useCallback, useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -140,7 +140,7 @@ function AvatarSphere({
   const threeColor = useMemo(() => new THREE.Color(color), [color]);
 
   // Load avatar texture asynchronously, swap material on success
-  useMemo(() => {
+  useEffect(() => {
     if (!pictureUrl) return;
     avatarLoader.load(
       pictureUrl,
@@ -178,7 +178,7 @@ function LabelSprite({
     const canvas = new OffscreenCanvas(256, 64);
     const ctx = canvas.getContext("2d")!;
     ctx.font = "24px monospace";
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.fillStyle = `rgba(0,255,65,${alpha})`;
     ctx.textAlign = "center";
     ctx.fillText(text.slice(0, 20), 128, 40);
     return new THREE.CanvasTexture(canvas);
@@ -325,8 +325,8 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
         pos[i * 6 + 3] = tgt.x ?? 0;
         pos[i * 6 + 4] = tgt.y ?? 0;
         pos[i * 6 + 5] = tgt.z ?? 0;
-        col[i * 6] = 0.5; col[i * 6 + 1] = 0.7; col[i * 6 + 2] = 1.0;
-        col[i * 6 + 3] = 0.5; col[i * 6 + 4] = 0.7; col[i * 6 + 5] = 1.0;
+        col[i * 6] = 0.0; col[i * 6 + 1] = 1.0; col[i * 6 + 2] = 0.25;
+        col[i * 6 + 3] = 0.0; col[i * 6 + 4] = 1.0; col[i * 6 + 5] = 0.25;
       } else {
         // Hide: collapse to zero-length line (no draw artifact)
         pos[i * 6] = 0; pos[i * 6 + 1] = 0; pos[i * 6 + 2] = 0;
@@ -357,8 +357,10 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
 
 function CameraMonitor() {
   const lastCheckRef = useRef(0);
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
   useFrame(({ camera }) => {
+    // Record mount time on first frame
+    if (startTimeRef.current === 0) startTimeRef.current = Date.now();
     // Skip first 3 seconds to let simulation settle
     if (Date.now() - startTimeRef.current < 3000) return;
     const now = Date.now();

@@ -20,26 +20,25 @@ export function TimelinePanel() {
   };
 
   const title = selectedClusterId
-    ? "Cluster Timeline"
+    ? "SIGNAL FEED // CLUSTER"
     : selectedNodeId
-      ? "User Timeline"
-      : "Timeline";
+      ? "SIGNAL FEED // SUBJECT"
+      : "SIGNAL FEED";
 
-  // Don't render Sheet at all when closed — prevents onOpenChange race conditions
   if (!isOpen) return null;
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) handleClose(); }}>
       <SheetContent
         side="right"
-        className="w-full max-w-[400px] sm:max-w-[450px] bg-[#0a0a12]/95 border-white/10 p-0"
+        className="w-full max-w-[400px] sm:max-w-[450px] bg-black/95 border-[#00ff41]/15 p-0"
       >
-        <SheetHeader className="px-4 py-3 border-b border-white/10">
-          <SheetTitle className="font-mono text-sm text-white/80">
+        <SheetHeader className="px-4 py-2 border-b border-[#00ff41]/15 bg-[#00ff41]/5">
+          <SheetTitle className="font-mono text-[10px] text-[#00ff41]/60 uppercase tracking-[0.2em]">
             {title}
           </SheetTitle>
         </SheetHeader>
-        <div className="h-[calc(100%-60px)]">
+        <div className="h-[calc(100%-44px)]">
           {selectedClusterId ? (
             <ClusterTimeline clusterId={selectedClusterId} />
           ) : selectedNodeId ? (

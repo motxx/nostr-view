@@ -28,7 +28,7 @@ function Avatar({ src, name }: { src?: string; name: string }) {
   if (!src || failed) {
     const initial = name.charAt(0).toUpperCase() || "?";
     return (
-      <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 shrink-0 flex items-center justify-center font-mono text-xs text-white/50">
+      <div className="w-8 h-8 rounded bg-[#00ff41]/10 border border-[#00ff41]/15 shrink-0 flex items-center justify-center font-mono text-xs text-[#00ff41]/40">
         {initial}
       </div>
     );
@@ -38,7 +38,7 @@ function Avatar({ src, name }: { src?: string; name: string }) {
     <img
       src={src}
       alt=""
-      className="w-8 h-8 rounded-full object-cover border border-white/20 shrink-0"
+      className="w-8 h-8 rounded object-cover border border-[#00ff41]/15 shrink-0"
       onError={() => setFailed(true)}
       loading="lazy"
     />
@@ -58,20 +58,20 @@ export function NoteCard({ event, profile, compact }: NoteCardProps) {
       href={primalNoteUrl(event.id)}
       target="_blank"
       rel="noopener noreferrer"
-      className="block rounded-lg bg-white/5 border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-colors p-3 cursor-pointer"
+      className="block rounded bg-[#00ff41]/[0.02] border border-[#00ff41]/10 hover:bg-[#00ff41]/[0.06] hover:border-[#00ff41]/20 transition-colors p-3 cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <Avatar src={profile?.picture} name={displayName} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-mono text-sm text-white/80 font-medium truncate">
+            <span className="font-mono text-[11px] text-[#00ff41]/70 font-medium truncate">
               {displayName}
             </span>
-            <span className="font-mono text-xs text-white/30 shrink-0">
+            <span className="font-mono text-[10px] text-[#0ff]/25 shrink-0 tabular-nums">
               {formatTime(event.created_at)}
             </span>
           </div>
-          <p className="text-sm text-white/60 break-words whitespace-pre-wrap leading-relaxed">
+          <p className="text-[11px] font-mono text-[#00ff41]/45 break-words whitespace-pre-wrap leading-relaxed">
             {event.content.slice(0, maxLen)}
             {event.content.length > maxLen && "..."}
           </p>

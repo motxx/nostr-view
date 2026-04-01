@@ -45,10 +45,8 @@ export function ClusterOverviewPanel() {
     [myPubkey, clusters],
   );
 
-  // Sort clusters: user's cluster first, then by connectivity (most connected = closest)
   const sortedClusters = useMemo(() => {
     const sorted = [...clusters].sort((a, b) => {
-      // User's cluster always first
       if (myCluster) {
         if (a.id === myCluster.id) return -1;
         if (b.id === myCluster.id) return 1;
@@ -79,7 +77,6 @@ export function ClusterOverviewPanel() {
       useUIStore.getState().setMyPubkey(null);
       return;
     }
-    // Decode npub if needed
     if (hex.startsWith("npub")) {
       try {
         const decoded = nip19.decode(hex);
@@ -94,9 +91,16 @@ export function ClusterOverviewPanel() {
   };
 
   return (
-    <div className="w-80 h-full bg-[#0a0a12]/90 border-l border-white/10 flex flex-col overflow-hidden">
+    <div className="w-80 h-full bg-black/90 border-l border-[#00ff41]/15 flex flex-col overflow-hidden">
+      {/* Panel header */}
+      <div className="px-3 py-1.5 border-b border-[#00ff41]/15 bg-[#00ff41]/5">
+        <span className="font-mono text-[9px] text-[#00ff41]/50 uppercase tracking-[0.2em]">
+          cluster monitoring
+        </span>
+      </div>
+
       {/* Strategy tabs */}
-      <div className="flex items-center gap-1 p-3 border-b border-white/10">
+      <div className="flex items-center gap-1 p-2 border-b border-[#00ff41]/10">
         {STRATEGIES.map((s) => (
           <button
             key={s}
@@ -104,10 +108,10 @@ export function ClusterOverviewPanel() {
               setClusterStrategy(s);
               useUIStore.getState().reheatSimulation();
             }}
-            className={`flex-1 font-mono text-[11px] px-2 py-1.5 rounded transition-colors ${
+            className={`flex-1 font-mono text-[10px] px-2 py-1.5 rounded transition-colors uppercase tracking-wider ${
               clusterStrategy === s
-                ? "bg-white/15 text-white"
-                : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                ? "bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30"
+                : "text-white/30 hover:text-[#00ff41]/60 hover:bg-[#00ff41]/5 border border-transparent"
             }`}
           >
             {CLUSTER_STRATEGY_LABELS[s]}
@@ -115,13 +119,13 @@ export function ClusterOverviewPanel() {
         ))}
       </div>
 
-      {/* "You are here" */}
-      <div className="px-3 py-2 border-b border-white/10">
+      {/* Operator identification */}
+      <div className="px-3 py-2 border-b border-[#00ff41]/10">
         {myPubkey ? (
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-            <span className="font-mono text-[10px] text-green-400/70 truncate">
-              You:{" "}
+            <div className="w-1.5 h-1.5 rounded-full bg-[#00ff41] osint-pulse shrink-0" />
+            <span className="font-mono text-[10px] text-[#00ff41]/60 truncate">
+              OPR:{" "}
               {profiles.get(myPubkey)?.displayName ||
                 profiles.get(myPubkey)?.name ||
                 myPubkey.slice(0, 12) + "…"}
@@ -139,9 +143,9 @@ export function ClusterOverviewPanel() {
                 useUIStore.getState().setMyPubkey(null);
                 setPubkeyInput("");
               }}
-              className="text-white/20 hover:text-white/50 text-xs shrink-0"
+              className="text-[#00ff41]/20 hover:text-[#00ff41]/50 text-xs shrink-0 font-mono"
             >
-              ×
+              [×]
             </button>
           </div>
         ) : (
@@ -157,11 +161,11 @@ export function ClusterOverviewPanel() {
               value={pubkeyInput}
               onChange={(e) => setPubkeyInput(e.target.value)}
               placeholder="npub or hex pubkey"
-              className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 font-mono text-[10px] text-white/60 placeholder:text-white/20 outline-none focus:border-white/20"
+              className="flex-1 bg-[#00ff41]/5 border border-[#00ff41]/15 rounded px-2 py-1 font-mono text-[10px] text-[#00ff41]/60 placeholder:text-[#00ff41]/15 outline-none focus:border-[#00ff41]/30"
             />
             <button
               type="submit"
-              className="font-mono text-[10px] text-white/40 hover:text-white/70 px-2 py-1 border border-white/10 rounded hover:bg-white/5"
+              className="font-mono text-[10px] text-[#00ff41]/40 hover:text-[#00ff41]/70 px-2 py-1 border border-[#00ff41]/15 rounded hover:bg-[#00ff41]/5 uppercase"
             >
               Set
             </button>
@@ -170,10 +174,10 @@ export function ClusterOverviewPanel() {
       </div>
 
       {/* Cluster list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto osint-scroll">
         {summaries.length === 0 && (
-          <div className="font-mono text-xs text-white/30 text-center py-8">
-            Waiting for data...
+          <div className="font-mono text-[10px] text-[#00ff41]/25 text-center py-8 uppercase tracking-wider">
+            Awaiting signal data...
           </div>
         )}
 
@@ -183,8 +187,8 @@ export function ClusterOverviewPanel() {
           return (
             <div
               key={cluster.id}
-              className={`border-b border-white/5 hover:bg-white/[0.03] transition-colors ${
-                isMyCluster ? "bg-white/[0.04]" : ""
+              className={`border-b border-[#00ff41]/5 hover:bg-[#00ff41]/[0.03] transition-colors ${
+                isMyCluster ? "bg-[#00ff41]/[0.04] border-l-2 border-l-[#00ff41]/30" : ""
               }`}
             >
               {/* Cluster header */}
@@ -193,26 +197,26 @@ export function ClusterOverviewPanel() {
                 className="w-full px-3 py-2.5 text-left flex items-center gap-2"
               >
                 <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  className="w-2 h-2 rounded-sm shrink-0"
                   style={{ backgroundColor: cluster.color }}
                 />
                 <span
-                  className="font-mono text-xs font-medium truncate"
+                  className="font-mono text-[11px] font-medium truncate"
                   style={{ color: cluster.color }}
                 >
                   {cluster.label}
                 </span>
                 {isMyCluster && (
-                  <span className="font-mono text-[9px] text-green-400/60 shrink-0">
-                    YOU
+                  <span className="font-mono text-[8px] text-[#00ff41]/60 shrink-0 border border-[#00ff41]/20 rounded px-1 uppercase">
+                    opr
                   </span>
                 )}
-                <span className="font-mono text-[10px] text-white/30 ml-auto shrink-0">
-                  {cluster.memberPubkeys.size}
+                <span className="font-mono text-[10px] text-white/20 ml-auto shrink-0 tabular-nums">
+                  [{cluster.memberPubkeys.size}]
                 </span>
               </button>
 
-              {/* Representative notes */}
+              {/* Representative signals */}
               {notes.length > 0 && (
                 <div className="px-3 pb-2 space-y-1">
                   {notes.map((note) => {
@@ -227,12 +231,12 @@ export function ClusterOverviewPanel() {
                         href={primalNoteUrl(note.id)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block rounded bg-white/[0.03] hover:bg-white/[0.06] px-2 py-1.5 transition-colors"
+                        className="block rounded bg-[#00ff41]/[0.02] hover:bg-[#00ff41]/[0.06] border border-[#00ff41]/5 hover:border-[#00ff41]/15 px-2 py-1.5 transition-colors"
                       >
-                        <div className="font-mono text-[10px] text-white/40 mb-0.5">
+                        <div className="font-mono text-[9px] text-[#0ff]/30 mb-0.5">
                           {name}
                         </div>
-                        <div className="font-mono text-[11px] text-white/60 leading-relaxed line-clamp-2">
+                        <div className="font-mono text-[10px] text-[#00ff41]/50 leading-relaxed line-clamp-2">
                           {note.content.slice(0, 140)}
                         </div>
                       </a>
@@ -241,7 +245,7 @@ export function ClusterOverviewPanel() {
                 </div>
               )}
 
-              {/* Bridge people */}
+              {/* Bridge connections */}
               {clusterBridges.length > 0 && (
                 <BridgeSection
                   bridges={clusterBridges}
@@ -268,8 +272,8 @@ function BridgeSection({
 }) {
   return (
     <div className="px-3 pb-2.5">
-      <div className="font-mono text-[9px] text-white/25 mb-1 uppercase tracking-wider">
-        Bridges
+      <div className="font-mono text-[8px] text-[#0ff]/25 mb-1 uppercase tracking-[0.2em]">
+        cross-links
       </div>
       {bridges.slice(0, 3).map((bridge) => {
         const other = clusters.find((c) => c.id === bridge.targetClusterId);
@@ -277,15 +281,15 @@ function BridgeSection({
         return (
           <div key={bridge.targetClusterId} className="mb-1.5">
             <div className="flex items-center gap-1 mb-0.5">
-              <span className="font-mono text-[10px] text-white/30">↔</span>
+              <span className="font-mono text-[10px] text-[#00ff41]/25">⟷</span>
               <span
                 className="font-mono text-[10px]"
                 style={{ color: other.color }}
               >
                 {other.label}
               </span>
-              <span className="font-mono text-[9px] text-white/20">
-                {bridge.sharedCount}
+              <span className="font-mono text-[9px] text-white/15 tabular-nums">
+                [{bridge.sharedCount}]
               </span>
             </div>
             <div className="flex flex-wrap gap-1 ml-3">
@@ -299,16 +303,16 @@ function BridgeSection({
                     href={primalProfileUrl(pk)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 bg-white/[0.03] hover:bg-white/[0.06] rounded px-1.5 py-0.5 transition-colors"
+                    className="inline-flex items-center gap-1 bg-[#00ff41]/[0.03] hover:bg-[#00ff41]/[0.08] border border-[#00ff41]/5 rounded px-1.5 py-0.5 transition-colors"
                   >
                     {p?.picture && (
                       <img
                         src={p.picture}
                         alt=""
-                        className="w-3 h-3 rounded-full object-cover"
+                        className="w-3 h-3 rounded object-cover"
                       />
                     )}
-                    <span className="font-mono text-[9px] text-white/40">
+                    <span className="font-mono text-[9px] text-[#00ff41]/35">
                       {name}
                     </span>
                   </a>

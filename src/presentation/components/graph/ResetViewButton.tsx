@@ -11,11 +11,11 @@ export function ResetViewButton() {
   return (
     <button
       onClick={resetCamera}
-      className="fixed bottom-6 left-6 z-[100] flex items-center gap-2 bg-black/80 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-2.5 font-mono text-sm text-white/70 hover:text-white hover:border-white/25 transition-all duration-200 hover:bg-white/5"
+      className="fixed bottom-8 left-6 z-[100] flex items-center gap-2 bg-black/90 backdrop-blur-sm border border-[#00ff41]/20 rounded px-4 py-2.5 font-mono text-[11px] text-[#00ff41]/60 hover:text-[#00ff41] hover:border-[#00ff41]/40 transition-all duration-200 hover:bg-[#00ff41]/5 uppercase tracking-wider"
     >
       <svg
-        width="16"
-        height="16"
+        width="14"
+        height="14"
         viewBox="0 0 16 16"
         fill="none"
         className="shrink-0"
@@ -44,7 +44,7 @@ export function ResetViewButton() {
           strokeLinecap="round"
         />
       </svg>
-      Overview
+      [overview]
     </button>
   );
 }

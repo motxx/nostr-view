@@ -57,10 +57,23 @@ export function NodeDetailCard() {
   const timeAgo = lastActive ? formatTimeAgo(lastActive) : "unknown";
 
   return (
-    <div className="fixed top-16 left-6 z-[100] w-80 pointer-events-auto">
-      <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
+    <div className="fixed top-20 left-6 z-[100] w-80 pointer-events-auto">
+      <div className="osint-panel bg-black/90 backdrop-blur-md border border-[#00ff41]/20 rounded p-0 shadow-2xl shadow-[#00ff41]/5">
+        {/* Classification header */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#00ff41]/15 bg-[#00ff41]/5">
+          <span className="font-mono text-[9px] text-[#00ff41]/60 uppercase tracking-[0.2em]">
+            subject profile
+          </span>
+          <button
+            onClick={() => selectNode(null)}
+            className="text-[#00ff41]/30 hover:text-[#00ff41]/60 text-xs leading-none"
+          >
+            [×]
+          </button>
+        </div>
+
+        {/* Subject info */}
+        <div className="flex items-start gap-3 px-3 py-3">
           <a
             href={primalProfileUrl(selectedNodeId)}
             target="_blank"
@@ -71,10 +84,10 @@ export function NodeDetailCard() {
               <img
                 src={profile.picture}
                 alt=""
-                className="w-12 h-12 rounded-full object-cover border border-white/20"
+                className="w-12 h-12 rounded border border-[#00ff41]/20 object-cover"
               />
             ) : (
-              <div className="w-12 h-12 rounded-full bg-blue-500/30 border border-white/20" />
+              <div className="w-12 h-12 rounded bg-[#00ff41]/10 border border-[#00ff41]/20" />
             )}
           </a>
           <div className="min-w-0 flex-1">
@@ -82,54 +95,48 @@ export function NodeDetailCard() {
               href={primalProfileUrl(selectedNodeId)}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-sm text-white font-medium truncate block hover:text-blue-300 transition-colors"
+              className="font-mono text-sm text-[#00ff41] font-medium truncate block hover:text-[#0ff] transition-colors"
             >
               {displayName}
             </a>
             {profile?.nip05 && (
-              <div className="font-mono text-xs text-white/50 truncate">
+              <div className="font-mono text-[10px] text-[#0ff]/40 truncate">
                 {profile.nip05}
               </div>
             )}
-            <div className="font-mono text-xs text-white/30 mt-0.5">
-              Last active: {timeAgo}
+            <div className="font-mono text-[10px] text-white/25 mt-0.5">
+              LAST ACTIVE: <span className="text-[#00ff41]/50">{timeAgo}</span>
             </div>
           </div>
-          <button
-            onClick={() => selectNode(null)}
-            className="text-white/30 hover:text-white/60 text-lg leading-none shrink-0"
-          >
-            ×
-          </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <Stat label="Score" value={node.influenceScore.toFixed(1)} />
-          <Stat label="Notes" value={String(node.noteCount)} />
-          <Stat label="Reacts" value={String(node.reactionCount)} />
-          <Stat label="Reposts" value={String(node.repostCount)} />
+        {/* Metrics grid */}
+        <div className="grid grid-cols-4 gap-px mx-3 mb-3 border border-[#00ff41]/10 rounded overflow-hidden">
+          <Stat label="SCORE" value={node.influenceScore.toFixed(1)} />
+          <Stat label="NOTES" value={String(node.noteCount)} />
+          <Stat label="REACT" value={String(node.reactionCount)} />
+          <Stat label="RPST" value={String(node.repostCount)} />
         </div>
 
-        {/* Latest note */}
+        {/* Latest intercept */}
         {latestNote && (
-          <div className="border-t border-white/10 pt-3">
-            <div className="font-mono text-xs text-white/40 mb-1">
-              Latest post
+          <div className="border-t border-[#00ff41]/10 px-3 py-2.5">
+            <div className="font-mono text-[9px] text-[#0ff]/40 mb-1 uppercase tracking-wider">
+              latest intercept
             </div>
-            <div className="font-mono text-xs text-white/70 leading-relaxed line-clamp-4 break-all mb-2">
+            <div className="font-mono text-[10px] text-[#00ff41]/60 leading-relaxed line-clamp-4 break-all">
               {latestNote.content}
             </div>
           </div>
         )}
 
-        {/* Primal buttons */}
-        <div className="border-t border-white/10 pt-3 mt-1 flex gap-2">
+        {/* Action buttons */}
+        <div className="border-t border-[#00ff41]/10 px-3 py-2.5 flex gap-2">
           <a
             href={primalProfileUrl(selectedNodeId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-500/15 border border-purple-400/30 font-mono text-xs text-purple-300 hover:bg-purple-500/25 hover:text-purple-200 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-[#00ff41]/5 border border-[#00ff41]/20 font-mono text-[10px] text-[#00ff41]/60 hover:bg-[#00ff41]/10 hover:text-[#00ff41] transition-colors uppercase tracking-wider"
           >
             Profile
             <ExternalLinkIcon />
@@ -139,9 +146,9 @@ export function NodeDetailCard() {
               href={primalNoteUrl(latestNote.id)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-500/15 border border-purple-400/30 font-mono text-xs text-purple-300 hover:bg-purple-500/25 hover:text-purple-200 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-[#00ff41]/5 border border-[#00ff41]/20 font-mono text-[10px] text-[#00ff41]/60 hover:bg-[#00ff41]/10 hover:text-[#00ff41] transition-colors uppercase tracking-wider"
             >
-              Latest Note
+              Source
               <ExternalLinkIcon />
             </a>
           )}
@@ -153,9 +160,9 @@ export function NodeDetailCard() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="text-center">
-      <div className="font-mono text-sm text-white font-medium">{value}</div>
-      <div className="font-mono text-[10px] text-white/40">{label}</div>
+    <div className="text-center py-1.5 bg-[#00ff41]/[0.03]">
+      <div className="font-mono text-sm text-[#00ff41]/80 font-medium tabular-nums">{value}</div>
+      <div className="font-mono text-[8px] text-[#0ff]/30 uppercase tracking-wider">{label}</div>
     </div>
   );
 }

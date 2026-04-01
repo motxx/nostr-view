@@ -26,6 +26,7 @@ export default function RootLayout({
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </QueryProvider>
+        <div className="osint-scanlines" />
       </body>
     </html>
   );

@@ -128,3 +128,95 @@
     @apply font-sans;
   }
 }
+
+/* ── OSINT CRT / Scanline Overlay ── */
+.osint-scanlines {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.015) 2px,
+    rgba(0, 255, 65, 0.015) 4px
+  );
+  mix-blend-mode: screen;
+}
+
+.osint-scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+}
+
+/* ── OSINT panel corner decorations ── */
+.osint-panel {
+  position: relative;
+}
+
+.osint-panel::before,
+.osint-panel::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: rgba(0, 255, 65, 0.3);
+  pointer-events: none;
+}
+
+.osint-panel::before {
+  top: 0;
+  left: 0;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+
+.osint-panel::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+}
+
+/* ── OSINT blink cursor ── */
+@keyframes osint-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.osint-blink {
+  animation: osint-blink 1s step-end infinite;
+}
+
+/* ── OSINT pulse ring ── */
+@keyframes osint-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(0, 255, 65, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+}
+
+.osint-pulse {
+  animation: osint-pulse-ring 2s ease-out infinite;
+}
+
+/* ── Scrollbar (OSINT green) ── */
+.osint-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.osint-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 255, 65, 0.03);
+}
+.osint-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.15);
+  border-radius: 2px;
+}
+.osint-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 65, 0.3);
+}
