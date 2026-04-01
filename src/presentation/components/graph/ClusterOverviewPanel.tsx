@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useGraphStore, selectLabeledClusters } from "@/store/graph-store";
+import { useGraphStore } from "@/store/graph-store";
 import { useUIStore } from "@/store/ui-store";
 import { useEventStore } from "@/store/event-store";
 import {
@@ -21,7 +21,15 @@ import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
 const STRATEGIES: ClusterStrategy[] = ["topic", "interaction", "language"];
 
 export function ClusterOverviewPanel() {
-  const clusters = useGraphStore(selectLabeledClusters);
+  const rawClusters = useGraphStore((s) => s.clusters);
+  const labelOverrides = useGraphStore((s) => s.clusterLabelOverrides);
+  const clusters = useMemo(() => {
+    if (labelOverrides.size === 0) return rawClusters;
+    return rawClusters.map((c) => {
+      const override = labelOverrides.get(c.id);
+      return override ? { ...c, label: override } : c;
+    });
+  }, [rawClusters, labelOverrides]);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
   const setClusterStrategy = useUIStore((s) => s.setClusterStrategy);
   const selectCluster = useUIStore((s) => s.selectCluster);

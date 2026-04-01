@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useGraphStore, selectLabeledClusters } from "./graph-store";
+import { useGraphStore } from "./graph-store";
 import type { GraphNode } from "@/domain/entities/graph-node";
 import type { GraphEdge } from "@/domain/entities/graph-edge";
 import type { Cluster } from "@/domain/entities/cluster";
@@ -160,33 +160,36 @@ describe("graph-store", () => {
     });
   });
 
-  describe("selectLabeledClusters", () => {
+  describe("label override merging", () => {
     const clusters: Cluster[] = [
       { id: "c1", label: "bitcoin", hashtags: ["bitcoin"], memberPubkeys: new Set(["a"]), color: "#f00" },
       { id: "c2", label: "nostr", hashtags: ["nostr"], memberPubkeys: new Set(["b"]), color: "#0f0" },
     ];
 
+    function applyOverrides(cs: Cluster[], overrides: Map<string, string>): Cluster[] {
+      if (overrides.size === 0) return cs;
+      return cs.map((c) => {
+        const override = overrides.get(c.id);
+        return override ? { ...c, label: override } : c;
+      });
+    }
+
     it("returns clusters unchanged when no overrides", () => {
-      useGraphStore.getState().setClusters(clusters);
-      const labeled = selectLabeledClusters(useGraphStore.getState());
-      expect(labeled[0].label).toBe("bitcoin");
-      expect(labeled[1].label).toBe("nostr");
+      const result = applyOverrides(clusters, new Map());
+      expect(result[0].label).toBe("bitcoin");
+      expect(result[1].label).toBe("nostr");
+      expect(result).toBe(clusters); // same reference
     });
 
     it("applies overrides to matching cluster IDs", () => {
-      useGraphStore.getState().setClusters(clusters);
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
-      const labeled = selectLabeledClusters(useGraphStore.getState());
-      expect(labeled[0].label).toBe("BTC Maxis");
-      expect(labeled[1].label).toBe("nostr"); // unchanged
+      const result = applyOverrides(clusters, new Map([["c1", "BTC Maxis"]]));
+      expect(result[0].label).toBe("BTC Maxis");
+      expect(result[1].label).toBe("nostr");
     });
 
     it("does not mutate original cluster objects", () => {
-      useGraphStore.getState().setClusters(clusters);
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
-      selectLabeledClusters(useGraphStore.getState());
-      // Original cluster in store is unchanged
-      expect(useGraphStore.getState().clusters[0].label).toBe("bitcoin");
+      applyOverrides(clusters, new Map([["c1", "BTC Maxis"]]));
+      expect(clusters[0].label).toBe("bitcoin");
     });
   });
 

@@ -71,11 +71,3 @@ export const useGraphStore = create<GraphStore>((set) => ({
     }),
 }));
 
-/** Selector: clusters with LLM label overrides applied. Use instead of `s.clusters` in UI. */
-export function selectLabeledClusters(s: GraphStore): Cluster[] {
-  if (s.clusterLabelOverrides.size === 0) return s.clusters;
-  return s.clusters.map((c) => {
-    const override = s.clusterLabelOverrides.get(c.id);
-    return override ? { ...c, label: override } : c;
-  });
-}

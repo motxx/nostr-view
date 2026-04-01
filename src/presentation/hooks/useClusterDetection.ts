@@ -1,15 +1,24 @@
 "use client";
 
 import { useMemo } from "react";
-import { useGraphStore, selectLabeledClusters } from "@/store/graph-store";
+import { useGraphStore } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
 export function useClusterTimeline(clusterId: string | null) {
-  const clusters = useGraphStore(selectLabeledClusters);
+  const rawClusters = useGraphStore((s) => s.clusters);
+  const labelOverrides = useGraphStore((s) => s.clusterLabelOverrides);
   const getEventsByKind = useEventStore((s) => s.getEventsByKind);
   const profiles = useEventStore((s) => s.profiles);
+
+  const clusters = useMemo(() => {
+    if (labelOverrides.size === 0) return rawClusters;
+    return rawClusters.map((c) => {
+      const override = labelOverrides.get(c.id);
+      return override ? { ...c, label: override } : c;
+    });
+  }, [rawClusters, labelOverrides]);
 
   return useMemo(() => {
     if (!clusterId) return { events: [], cluster: null };
