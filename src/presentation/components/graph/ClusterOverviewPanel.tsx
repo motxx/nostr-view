@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useGraphStore } from "@/store/graph-store";
+import { useGraphStore, selectLabeledClusters } from "@/store/graph-store";
 import { useUIStore } from "@/store/ui-store";
 import { useEventStore } from "@/store/event-store";
 import {
@@ -21,7 +21,7 @@ import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
 const STRATEGIES: ClusterStrategy[] = ["topic", "interaction", "language"];
 
 export function ClusterOverviewPanel() {
-  const clusters = useGraphStore((s) => s.clusters);
+  const clusters = useGraphStore(selectLabeledClusters);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
   const setClusterStrategy = useUIStore((s) => s.setClusterStrategy);
   const selectCluster = useUIStore((s) => s.selectCluster);

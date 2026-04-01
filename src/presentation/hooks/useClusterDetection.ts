@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { useGraphStore } from "@/store/graph-store";
+import { useGraphStore, selectLabeledClusters } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
 export function useClusterTimeline(clusterId: string | null) {
-  const clusters = useGraphStore((s) => s.clusters);
+  const clusters = useGraphStore(selectLabeledClusters);
   const getEventsByKind = useEventStore((s) => s.getEventsByKind);
   const profiles = useEventStore((s) => s.profiles);
 

@@ -12,6 +12,9 @@ interface GraphStore {
   bridges: Map<string, BridgeInfo[]>;
   explorationMap: ExplorationMap | null;
   lastUpdated: number;
+  /** LLM-generated label overrides, keyed by cluster ID. Separate from
+   *  clusters so that periodic setAll() doesn't overwrite them. */
+  clusterLabelOverrides: Map<string, string>;
 
   setGraphData: (nodes: GraphNode[], edges: GraphEdge[]) => void;
   setClusters: (clusters: Cluster[]) => void;
@@ -24,7 +27,8 @@ interface GraphStore {
     bridges: Map<string, BridgeInfo[]>;
     explorationMap: ExplorationMap | null;
   }) => void;
-  updateClusterLabels: (labelMap: Map<string, string>) => void;
+  setClusterLabelOverrides: (labelMap: Map<string, string>) => void;
+  clearClusterLabelOverrides: () => void;
   clear: () => void;
 }
 
@@ -35,6 +39,7 @@ export const useGraphStore = create<GraphStore>((set) => ({
   bridges: new Map(),
   explorationMap: null,
   lastUpdated: 0,
+  clusterLabelOverrides: new Map(),
 
   setGraphData: (nodes, edges) =>
     set({ nodes, edges, lastUpdated: Date.now() }),
@@ -45,13 +50,14 @@ export const useGraphStore = create<GraphStore>((set) => ({
 
   setAll: (data) => set({ ...data, lastUpdated: Date.now() }),
 
-  updateClusterLabels: (labelMap) =>
-    set((state) => ({
-      clusters: state.clusters.map((c) => {
-        const newLabel = labelMap.get(c.id);
-        return newLabel ? { ...c, label: newLabel } : c;
-      }),
-    })),
+  setClusterLabelOverrides: (labelMap) =>
+    set((state) => {
+      const merged = new Map(state.clusterLabelOverrides);
+      for (const [id, label] of labelMap) merged.set(id, label);
+      return { clusterLabelOverrides: merged };
+    }),
+
+  clearClusterLabelOverrides: () => set({ clusterLabelOverrides: new Map() }),
 
   clear: () =>
     set({
@@ -60,6 +66,16 @@ export const useGraphStore = create<GraphStore>((set) => ({
       clusters: [],
       bridges: new Map(),
       explorationMap: null,
+      clusterLabelOverrides: new Map(),
       lastUpdated: 0,
     }),
 }));
+
+/** Selector: clusters with LLM label overrides applied. Use instead of `s.clusters` in UI. */
+export function selectLabeledClusters(s: GraphStore): Cluster[] {
+  if (s.clusterLabelOverrides.size === 0) return s.clusters;
+  return s.clusters.map((c) => {
+    const override = s.clusterLabelOverrides.get(c.id);
+    return override ? { ...c, label: override } : c;
+  });
+}
