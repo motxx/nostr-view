@@ -22,9 +22,17 @@ import {
   influenceToSize,
   assignTiers,
   pulsePeriod,
+  DEFAULT_TIER,
   type NodeTier,
 } from "@/lib/graph-utils";
-import { computeClusterCentroid, type NodePosition } from "@/lib/nebula-manager";
+import { computeClusterCentroid } from "@/lib/nebula-manager";
+import {
+  spawnParticles,
+  advanceParticles,
+  lerp,
+  type Particle,
+  type EdgeEndpoints,
+} from "@/lib/edge-particles";
 
 // ── Types ──
 
@@ -281,7 +289,7 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
 
   const maxLinks = 2000;
   const positions = useMemo(() => new Float32Array(maxLinks * 6), []);
-  const colors = useMemo(() => new Float32Array(maxLinks * 6), []); // rgb per vertex
+  const colors = useMemo(() => new Float32Array(maxLinks * 6), []);
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -293,10 +301,14 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
     const s = simState.current;
     if (!s || !lineRef.current) return;
 
-    const posAttr = geom.getAttribute("position") as THREE.BufferAttribute;
-    const colorAttr = geom.getAttribute("color") as THREE.BufferAttribute;
+    // Three.js BufferGeometry requires mutating the underlying Float32Array
+    // every frame. This is the standard R3F pattern — the arrays are our own
+    // typed buffers passed to useMemo, not React-managed state.
+    /* eslint-disable react-hooks/immutability -- Three.js buffer mutation in useFrame */
+    const posAttr = geom.attributes.position as THREE.BufferAttribute;
+    const colAttr = geom.attributes.color as THREE.BufferAttribute;
     const pos = posAttr.array as Float32Array;
-    const col = colorAttr.array as Float32Array;
+    const col = colAttr.array as Float32Array;
 
     // Determine which node is active (selected or hovered)
     const ui = useUIStore.getState();
@@ -337,8 +349,9 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
     }
 
     posAttr.needsUpdate = true;
-    colorAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
     geom.setDrawRange(0, s.links.length * 2);
+    /* eslint-enable react-hooks/immutability */
   });
 
   return (
@@ -351,6 +364,127 @@ function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }
       />
     </lineSegments>
   );
+}
+
+// ── Edge particle flow ──
+// When a node is selected, small glowing particles travel along its edges
+// to visualise Nostr events flowing through the network.  Rendered as a
+// single THREE.Points draw call for performance.
+
+const MAX_PARTICLES = 200;
+
+/** Circular glow texture for particles (module-level, created once). */
+let particleTexture: THREE.Texture | null = null;
+function getParticleTexture(): THREE.Texture {
+  if (particleTexture) return particleTexture;
+  const size = 64;
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(0,255,65,1)");
+  g.addColorStop(0.3, "rgba(0,255,65,0.6)");
+  g.addColorStop(1, "rgba(0,255,65,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  particleTexture = new THREE.CanvasTexture(canvas);
+  return particleTexture;
+}
+
+function EdgeParticles({ simState }: { simState: React.RefObject<SimState | null> }) {
+  const particlePos = useMemo(() => new Float32Array(MAX_PARTICLES * 3), []);
+  const particleGeom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(particlePos, 3));
+    return g;
+  }, [particlePos]);
+
+  const mat = useMemo(
+    () =>
+      new THREE.PointsMaterial({
+        map: getParticleTexture(),
+        size: 3,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    [],
+  );
+
+  // Particle pool — mutable, not React state
+  const poolRef = useRef<Particle[]>([]);
+  const spawnTimerRef = useRef(0);
+
+  // Build edge endpoints list for spawnParticles (derived from sim links)
+  const edgesRef = useRef<EdgeEndpoints[]>([]);
+
+  useFrame((_, delta) => {
+    const s = simState.current;
+    if (!s) return;
+
+    const ui = useUIStore.getState();
+    const activeId = ui.selectedNodeId;
+    const pool = poolRef.current;
+    /* eslint-disable react-hooks/immutability -- Three.js buffer mutation in useFrame */
+    const posAttr = particleGeom.attributes.position as THREE.BufferAttribute;
+    const pos = posAttr.array as Float32Array;
+
+    // Rebuild edge endpoints (cheap — just string coercions)
+    if (edgesRef.current.length !== s.links.length) {
+      edgesRef.current = s.links.map((link) => ({
+        sourceId: String(typeof link.source === "object" ? link.source.id : link.source),
+        targetId: String(typeof link.target === "object" ? link.target.id : link.target),
+      }));
+    }
+
+    // ── Spawn new particles on active edges ──
+    if (activeId) {
+      spawnTimerRef.current += delta;
+      if (spawnTimerRef.current > 0.12) {
+        spawnTimerRef.current = 0;
+        const spawned = spawnParticles(
+          edgesRef.current,
+          activeId,
+          pool,
+          MAX_PARTICLES,
+          () => Math.random(),
+        );
+        pool.push(...spawned);
+      }
+    } else {
+      spawnTimerRef.current = 0;
+    }
+
+    // ── Advance particles and write positions ──
+    const alive = advanceParticles(pool, delta);
+
+    for (let i = 0; i < alive; i++) {
+      const p = pool[i];
+      const link = s.links[p.linkIdx];
+      if (!link) continue;
+      const src = typeof link.source === "object" ? link.source : s.nodeMap.get(String(link.source));
+      const tgt = typeof link.target === "object" ? link.target : s.nodeMap.get(String(link.target));
+      if (!src || !tgt) continue;
+
+      pos[i * 3] = lerp(src.x ?? 0, tgt.x ?? 0, p.t);
+      pos[i * 3 + 1] = lerp(src.y ?? 0, tgt.y ?? 0, p.t);
+      pos[i * 3 + 2] = lerp(src.z ?? 0, tgt.z ?? 0, p.t);
+    }
+
+    // Zero out remaining slots
+    for (let i = alive; i < MAX_PARTICLES; i++) {
+      pos[i * 3] = 0;
+      pos[i * 3 + 1] = 0;
+      pos[i * 3 + 2] = 0;
+    }
+
+    posAttr.needsUpdate = true;
+    particleGeom.setDrawRange(0, alive);
+    /* eslint-enable react-hooks/immutability */
+  });
+
+  return <points geometry={particleGeom} material={mat} />;
 }
 
 // ── Camera monitor ──
@@ -405,7 +539,7 @@ function ForceGraphScene() {
         influenceScore: n.influenceScore,
         clusterId: n.clusterId,
         clusterColor: n.clusterId ? clusterColorMap.get(n.clusterId) : undefined,
-        tier: tierMap.get(n.id) ?? ("dust" as NodeTier),
+        tier: tierMap.get(n.id) ?? DEFAULT_TIER,
       })),
     [nodes, tierMap, clusterColorMap],
   );
@@ -500,7 +634,7 @@ function ForceGraphScene() {
       const currentClusters = useGraphStore.getState().clusters;
       const cluster = currentClusters.find((c) => c.id === clusterId);
       if (!cluster) return;
-      const c = computeClusterCentroid(cluster, s.nodes as NodePosition[]);
+      const c = computeClusterCentroid(cluster, s.nodes);
       if (!c) return;
       camera.position.set(c.x + 150, c.y + 50, c.z + 150);
       camera.lookAt(c.x, c.y, c.z);
@@ -532,10 +666,11 @@ function ForceGraphScene() {
       const highlight = !connected || connected.has(nid);
       group.traverse((child) => {
         if (!(child instanceof THREE.Mesh || child instanceof THREE.Sprite)) return;
-        const mat = child.material as THREE.Material & { opacity?: number };
-        if (mat.opacity === undefined) return;
+        const mat = child.material;
+        if (!("opacity" in mat) || typeof mat.opacity !== "number") return;
         mat.userData.origOpacity ??= mat.opacity;
-        mat.opacity = highlight ? (mat.userData.origOpacity as number) : 0.08;
+        const orig = mat.userData.origOpacity;
+        mat.opacity = highlight ? (typeof orig === "number" ? orig : 1) : 0.08;
       });
     }
   }, []);
@@ -560,6 +695,9 @@ function ForceGraphScene() {
 
       {/* Links */}
       <GraphLinks simState={simStateRef} />
+
+      {/* Particle flow on active edges */}
+      <EdgeParticles simState={simStateRef} />
 
       {/* Camera monitor */}
       <CameraMonitor />

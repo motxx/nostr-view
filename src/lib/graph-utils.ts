@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 /* ── Tier types ── */
 export type NodeTier = "star" | "planet" | "dust";
+export const DEFAULT_TIER: NodeTier = "dust";
 
 export interface TieredNode {
   id: string;
