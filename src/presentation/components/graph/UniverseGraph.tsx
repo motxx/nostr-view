@@ -75,22 +75,24 @@ function buildConnectedSet(hoveredId: string): Set<string> {
 // ── Texture cache (module-level, survives re-renders) ──
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const glowTextureCache = new Map<string, any>();
+const signalTextureCache = new Map<string, any>();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getGlowTexture(color: string): any {
-  const cached = glowTextureCache.get(color);
+function getSignalTexture(color: string): any {
+  const cached = signalTextureCache.get(color);
   if (cached) return cached;
   const canvas = new OffscreenCanvas(128, 128);
   const ctx = canvas.getContext("2d")!;
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  // Sharp signal point: bright core, fast falloff
   g.addColorStop(0, color);
-  g.addColorStop(0.3, color + "80");
+  g.addColorStop(0.15, color);
+  g.addColorStop(0.5, color + "1a"); // ~10% alpha
   g.addColorStop(1, "transparent");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   const tex = new THREE.CanvasTexture(canvas);
-  glowTextureCache.set(color, tex);
+  signalTextureCache.set(color, tex);
   return tex;
 }
 
@@ -101,7 +103,7 @@ avatarLoader.crossOrigin = "anonymous";
 
 // ── Node Components ──
 
-function GlowSprite({
+function SignalSprite({
   color,
   size,
   nodeId,
@@ -111,7 +113,7 @@ function GlowSprite({
   nodeId?: string;
 }) {
   const ref = useRef<THREE.Sprite>(null);
-  const tex = useMemo(() => getGlowTexture(color), [color]);
+  const tex = useMemo(() => getSignalTexture(color), [color]);
   const baseSize = size;
 
   // Pulse animation via useFrame (replaces onBeforeRender hack)
@@ -227,43 +229,74 @@ function LabelSprite({
   );
 }
 
-function OrbitRing({ radius, color }: { radius: number; color: string }) {
+function RadarPulse({
+  radius,
+  color,
+  nodeId,
+}: {
+  radius: number;
+  color: string;
+  nodeId?: string;
+}) {
   const groupRef = useRef<THREE.Group>(null);
+  const ringCount = 3;
 
-  const geom = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= 64; i++) {
-      const a = (i / 64) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+  const rings = useMemo(() => {
+    const arr: THREE.Line[] = [];
+    for (let r = 0; r < ringCount; r++) {
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+      });
+      const line = new THREE.Line(geom, mat);
+      line.userData.phaseOffset = r / ringCount;
+      arr.push(line);
     }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [radius]);
+    return arr;
+  }, [color, ringCount]);
 
-  // Random initial tilt so rings aren't all flat on XZ plane
-  const tilt = useMemo(
-    () => new THREE.Euler(
-      Math.random() * Math.PI * 0.6 - 0.3,
-      Math.random() * Math.PI * 2,
-      Math.random() * Math.PI * 0.4 - 0.2,
-    ),
-    [],
-  );
+  useFrame(() => {
+    if (!groupRef.current) return;
 
-  // Slow rotation
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.15;
+    // Three.js objects returned from useMemo are our own mutable scene objects.
+    // Mutating scale/material per frame is the standard R3F pattern.
+    /* eslint-disable react-hooks/immutability -- Three.js object mutation in useFrame */
+
+    // Determine pulse speed from activity
+    let period = 3; // default moderate speed
+    if (nodeId) {
+      const lastPost = useActivityStore.getState().lastPostTime.get(nodeId);
+      if (lastPost) {
+        const p = pulsePeriod(lastPost, Date.now() / 1000);
+        if (p > 0) period = p;
+      }
     }
+
+    const now = Date.now() / 1000;
+    for (const ring of rings) {
+      const phase = ring.userData.phaseOffset as number;
+      const t = ((now / period + phase) % 1);
+      const scale = t * radius;
+      ring.scale.set(scale, scale, scale);
+      const mat = ring.material as THREE.LineBasicMaterial;
+      mat.opacity = (1 - t) * 0.4;
+    }
+    /* eslint-enable react-hooks/immutability */
   });
 
   return (
-    <group ref={groupRef} rotation={tilt}>
-      <primitive object={new THREE.Line(geom, new THREE.LineBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.35,
-        blending: THREE.AdditiveBlending,
-      }))} />
+    <group ref={groupRef}>
+      {rings.map((ring, i) => (
+        <primitive key={i} object={ring} />
+      ))}
     </group>
   );
 }
@@ -280,7 +313,7 @@ function GraphNode({
   const score = node.influenceScore;
   const rawColor = influenceToColor(score, node.clusterColor);
   const tier = node.tier;
-  // Fix 2: Tier-based brightness — stars brighter, dust darker
+  // Tier-based brightness — hubs brighter, edges darker
   const color = tierBrightness(rawColor, tier);
   const size = influenceToSize(score);
   const dimFactor = node.isUnexplored ? 0.3 : 1;
@@ -305,28 +338,27 @@ function GraphNode({
 
   return (
     <group onClick={handleClick} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut}>
-      {tier === "star" && (
+      {tier === "hub" && (
         <>
           <AvatarSphere radius={size * 0.5} color={color} pictureUrl={node.picture} />
-          <OrbitRing radius={size * 1.2} color={color} />
-          <GlowSprite color={color} size={size * 3.5 * dimFactor} nodeId={node.id} />
+          <RadarPulse radius={size * 1.2} color={color} nodeId={node.id} />
+          <SignalSprite color={color} size={size * 3.5 * dimFactor} nodeId={node.id} />
           {node.name && <LabelSprite text={node.name} size={size} alpha={0.8 * dimFactor} />}
         </>
       )}
-      {tier === "planet" && (
+      {tier === "node" && (
         <>
           <AvatarSphere radius={size * 0.4} color={color} pictureUrl={node.picture} />
-          <GlowSprite color={color} size={size * 2.5 * dimFactor} nodeId={node.id} />
+          <SignalSprite color={color} size={size * 2.5 * dimFactor} nodeId={node.id} />
           {node.name && <LabelSprite text={node.name} size={size} alpha={0.6 * dimFactor} />}
         </>
       )}
-      {/* Fix 1: Dust — show tiny avatar + mini label for identifiable nodes */}
-      {tier === "dust" && (
+      {tier === "edge" && (
         <>
           {node.picture && (
             <AvatarSphere radius={Math.max(1.2, size * 0.25)} color={color} pictureUrl={node.picture} />
           )}
-          <GlowSprite
+          <SignalSprite
             color={color}
             size={Math.max(2.5, size * 0.8) * 1.5 * dimFactor}
             nodeId={node.id}

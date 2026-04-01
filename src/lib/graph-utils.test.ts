@@ -8,20 +8,20 @@ import {
 } from "./graph-utils";
 
 describe("assignTiers", () => {
-  it("assigns star to top 10 nodes", () => {
+  it("assigns hub to top 10 nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
       influenceScore: 60 - i,
     }));
     const tiers = assignTiers(nodes);
 
-    // Top 10 by score → star
+    // Top 10 by score → hub
     for (let i = 0; i < 10; i++) {
-      expect(tiers.get(`n${i}`)).toBe("star");
+      expect(tiers.get(`n${i}`)).toBe("hub");
     }
   });
 
-  it("assigns planet to next 40 nodes", () => {
+  it("assigns node to next 40 nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
       influenceScore: 60 - i,
@@ -29,11 +29,11 @@ describe("assignTiers", () => {
     const tiers = assignTiers(nodes);
 
     for (let i = 10; i < 50; i++) {
-      expect(tiers.get(`n${i}`)).toBe("planet");
+      expect(tiers.get(`n${i}`)).toBe("node");
     }
   });
 
-  it("assigns dust to remaining nodes", () => {
+  it("assigns edge to remaining nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
       influenceScore: 60 - i,
@@ -41,18 +41,18 @@ describe("assignTiers", () => {
     const tiers = assignTiers(nodes);
 
     for (let i = 50; i < 60; i++) {
-      expect(tiers.get(`n${i}`)).toBe("dust");
+      expect(tiers.get(`n${i}`)).toBe("edge");
     }
   });
 
-  it("handles fewer than 10 nodes — all are stars", () => {
+  it("handles fewer than 10 nodes — all are hubs", () => {
     const nodes = [
       { id: "a", influenceScore: 10 },
       { id: "b", influenceScore: 5 },
     ];
     const tiers = assignTiers(nodes);
-    expect(tiers.get("a")).toBe("star");
-    expect(tiers.get("b")).toBe("star");
+    expect(tiers.get("a")).toBe("hub");
+    expect(tiers.get("b")).toBe("hub");
   });
 });
 
@@ -106,36 +106,36 @@ describe("pulsePeriod", () => {
 
 describe("tierBrightness", () => {
   it("returns a valid hex color", () => {
-    expect(tierBrightness("#4fc3f7", "star")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(tierBrightness("#4fc3f7", "planet")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(tierBrightness("#4fc3f7", "dust")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tierBrightness("#4fc3f7", "hub")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tierBrightness("#4fc3f7", "node")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tierBrightness("#4fc3f7", "edge")).toMatch(/^#[0-9a-f]{6}$/);
   });
 
-  it("star is brighter than planet", () => {
+  it("hub is brighter than node", () => {
     const base = "#808080";
-    const star = tierBrightness(base, "star");
-    const planet = tierBrightness(base, "planet");
+    const hub = tierBrightness(base, "hub");
+    const node = tierBrightness(base, "node");
     // Compare green channel (chars 3-5)
-    expect(parseInt(star.slice(3, 5), 16)).toBeGreaterThan(
-      parseInt(planet.slice(3, 5), 16),
+    expect(parseInt(hub.slice(3, 5), 16)).toBeGreaterThan(
+      parseInt(node.slice(3, 5), 16),
     );
   });
 
-  it("planet is unchanged from input", () => {
-    expect(tierBrightness("#808080", "planet")).toBe("#808080");
+  it("node is unchanged from input", () => {
+    expect(tierBrightness("#808080", "node")).toBe("#808080");
   });
 
-  it("dust is darker than planet", () => {
+  it("edge is darker than node", () => {
     const base = "#808080";
-    const planet = tierBrightness(base, "planet");
-    const dust = tierBrightness(base, "dust");
-    expect(parseInt(dust.slice(3, 5), 16)).toBeLessThan(
-      parseInt(planet.slice(3, 5), 16),
+    const node = tierBrightness(base, "node");
+    const edge = tierBrightness(base, "edge");
+    expect(parseInt(edge.slice(3, 5), 16)).toBeLessThan(
+      parseInt(node.slice(3, 5), 16),
     );
   });
 
   it("clamps to 255 for bright inputs", () => {
-    const result = tierBrightness("#ffffff", "star");
+    const result = tierBrightness("#ffffff", "hub");
     expect(result).toBe("#ffffff");
   });
 });

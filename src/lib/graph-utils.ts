@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 /* ── Tier types ── */
-export type NodeTier = "star" | "planet" | "dust";
-export const DEFAULT_TIER: NodeTier = "dust";
+export type NodeTier = "hub" | "node" | "edge";
+export const DEFAULT_TIER: NodeTier = "edge";
 
 export interface TieredNode {
   id: string;
@@ -12,7 +12,7 @@ export interface TieredNode {
 
 /**
  * Assign tier based on influence rank.
- * Star: top 10, Planet: next 40, Dust: rest
+ * Hub: top 10, Node: next 40, Edge: rest
  */
 export function assignTiers(
   nodes: { id: string; influenceScore: number }[],
@@ -22,24 +22,23 @@ export function assignTiers(
   );
   const map = new Map<string, NodeTier>();
   sorted.forEach((n, i) => {
-    if (i < 10) map.set(n.id, "star");
-    else if (i < 50) map.set(n.id, "planet");
-    else map.set(n.id, "dust");
+    if (i < 10) map.set(n.id, "hub");
+    else if (i < 50) map.set(n.id, "node");
+    else map.set(n.id, "edge");
   });
   return map;
 }
 
-/* ── Glow sprite helper ── */
+/* ── Signal sprite helper ── */
 
-export function createGlowSprite(color: string, size: number): THREE.Sprite {
+export function createSignalSprite(color: string, size: number): THREE.Sprite {
   const canvas = new OffscreenCanvas(128, 128);
   const ctx = canvas.getContext("2d")!;
 
   const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   gradient.addColorStop(0, color);
-  gradient.addColorStop(0.2, color);
-  gradient.addColorStop(0.4, adjustAlpha(color, 0.6));
-  gradient.addColorStop(0.7, adjustAlpha(color, 0.15));
+  gradient.addColorStop(0.15, color);
+  gradient.addColorStop(0.5, adjustAlpha(color, 0.1));
   gradient.addColorStop(1, "transparent");
 
   ctx.fillStyle = gradient;
@@ -130,33 +129,41 @@ function createAvatarSphere(
   return mesh;
 }
 
-/* ── Orbit ring (Star only) ── */
+/* ── Radar pulse rings (Hub only) ── */
 
-function createOrbitRing(radius: number, color: THREE.Color): THREE.Line {
-  const points: THREE.Vector3[] = [];
-  for (let i = 0; i <= 64; i++) {
-    const angle = (i / 64) * Math.PI * 2;
-    points.push(
-      new THREE.Vector3(
-        Math.cos(angle) * radius,
-        0,
-        Math.sin(angle) * radius,
-      ),
-    );
+export function createRadarPulseRings(
+  maxRadius: number,
+  color: THREE.Color,
+  ringCount = 3,
+): THREE.Group {
+  const group = new THREE.Group();
+  for (let r = 0; r < ringCount; r++) {
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i <= 64; i++) {
+      const angle = (i / 64) * Math.PI * 2;
+      points.push(
+        new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)),
+      );
+    }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+    });
+    const line = new THREE.Line(geometry, material);
+    line.userData.phaseOffset = r / ringCount;
+    line.userData.maxRadius = maxRadius;
+    line.scale.set(0, 0, 0);
+    group.add(line);
   }
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const material = new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.3,
-    blending: THREE.AdditiveBlending,
-  });
-  return new THREE.Line(geometry, material);
+  return group;
 }
 
 /* ── Tier-specific node factories ── */
 
-export function createStarNode(
+export function createHubNode(
   score: number,
   color: string,
   name?: string,
@@ -170,14 +177,15 @@ export function createStarNode(
   const sphere = createAvatarSphere(size * 0.5, threeColor, pictureUrl);
   group.add(sphere);
 
-  // Orbit ring
-  const ring = createOrbitRing(size * 1.2, threeColor);
-  group.add(ring);
+  // Radar pulse rings
+  const radar = createRadarPulseRings(size * 1.2, threeColor);
+  radar.name = "radarPulse";
+  group.add(radar);
 
-  // Large glow
-  const glow = createGlowSprite(color, size * 3.5);
-  glow.name = "glow";
-  group.add(glow);
+  // Signal indicator
+  const signal = createSignalSprite(color, size * 3.5);
+  signal.name = "glow";
+  group.add(signal);
 
   // Always-on label
   if (name) {
@@ -187,7 +195,7 @@ export function createStarNode(
   return group;
 }
 
-export function createPlanetNode(
+export function createNodeNode(
   score: number,
   color: string,
   name?: string,
@@ -201,10 +209,10 @@ export function createPlanetNode(
   const sphere = createAvatarSphere(size * 0.4, threeColor, pictureUrl);
   group.add(sphere);
 
-  // Glow
-  const glow = createGlowSprite(color, size * 2.5);
-  glow.name = "glow";
-  group.add(glow);
+  // Signal indicator
+  const signal = createSignalSprite(color, size * 2.5);
+  signal.name = "glow";
+  group.add(signal);
 
   // Label
   if (name) {
@@ -214,13 +222,13 @@ export function createPlanetNode(
   return group;
 }
 
-export function createDustNode(score: number, color: string): THREE.Group {
+export function createEdgeNode(score: number, color: string): THREE.Group {
   const size = Math.max(2, influenceToSize(score) * 0.6);
   const group = new THREE.Group();
 
-  const glow = createGlowSprite(color, size * 1.5);
-  glow.name = "glow";
-  group.add(glow);
+  const signal = createSignalSprite(color, size * 1.5);
+  signal.name = "glow";
+  group.add(signal);
 
   return group;
 }
@@ -275,7 +283,7 @@ export function influenceToColor(score: number, baseColor?: string): string {
  * Adjust color brightness by tier so nodes within the same cluster
  * are visually distinguishable beyond just size.
  *
- * Star: +30% lighter, Planet: unchanged, Dust: -35% darker
+ * Hub: +30% lighter, Node: unchanged, Edge: -35% darker
  */
 export function tierBrightness(hexColor: string, tier: NodeTier): string {
   const r = parseInt(hexColor.slice(1, 3), 16);
@@ -284,9 +292,9 @@ export function tierBrightness(hexColor: string, tier: NodeTier): string {
 
   let factor: number;
   switch (tier) {
-    case "star":   factor = 1.3;  break;
-    case "planet": factor = 1.0;  break;
-    case "dust":   factor = 0.65; break;
+    case "hub":  factor = 1.3;  break;
+    case "node": factor = 1.0;  break;
+    case "edge": factor = 0.65; break;
   }
 
   const clamp = (v: number) => Math.min(255, Math.round(v * factor));

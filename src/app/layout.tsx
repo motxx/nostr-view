@@ -10,9 +10,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nostr Universe",
+  title: "Nostr Intelligence Desk",
   description:
-    "Visualize the Nostr information universe — topics as nebulae, influencers as stars",
+    "Visualize the Nostr network as an intelligence desk — signal clusters, hub nodes, and data flows",
 };
 
 export default function RootLayout({
