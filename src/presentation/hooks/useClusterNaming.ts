@@ -8,25 +8,32 @@ import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
 /**
  * After clusters are detected, asynchronously calls the LLM to generate
- * descriptive names. Fires exactly once per cluster strategy.
+ * descriptive names. Fires when unnamed clusters exist.
  *
  * - Named state lives in the Zustand store (clusterLabelOverrides)
- * - "Has been named" is derived during render from store state
+ * - "Unnamed" clusters are derived during render from store state
  * - Override clearing on strategy change is done in the event handler
  *   (ClusterOverviewPanel onClick), not during render
- * - Query key uses only the strategy, so at most 1 LLM call per strategy
+ * - queryFn re-checks overrides before calling API to avoid redundant requests
+ *   when a prior in-flight request already named some clusters
  */
 export function useClusterNaming() {
   const clusters = useGraphStore((s) => s.clusters);
   const overrides = useGraphStore((s) => s.clusterLabelOverrides);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
 
-  // Derived during render: has this strategy already been named?
-  const hasOverrides = clusters.length > 0 && clusters.some((c) => overrides.has(c.id));
+  // Derived during render: clusters not yet named by LLM
+  const unnamedIds = clusters
+    .filter((c) => !overrides.has(c.id))
+    .map((c) => c.id)
+    .sort()
+    .join(",");
 
   useQuery({
-    queryKey: ["cluster-names", clusterStrategy],
+    queryKey: ["cluster-names", clusterStrategy, unnamedIds],
     queryFn: async () => {
+      // Re-read store at fetch time — a prior in-flight request may have
+      // already named some of these clusters
       const currentClusters = useGraphStore.getState().clusters;
       const currentOverrides = useGraphStore.getState().clusterLabelOverrides;
       const toName = currentClusters.filter((c) => !currentOverrides.has(c.id));
@@ -75,9 +82,8 @@ export function useClusterNaming() {
 
       return labelMap.size;
     },
-    // Fire only when: clusters exist AND not yet named for this strategy
-    enabled: clusters.length > 0 && !hasOverrides,
-    staleTime: Infinity,
+    enabled: unnamedIds.length > 0,
+    staleTime: Infinity, // Same unnamed set = never re-fetch
     refetchOnWindowFocus: false,
     retry: false,
   });
