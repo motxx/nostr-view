@@ -12,8 +12,9 @@ interface GraphStore {
   bridges: Map<string, BridgeInfo[]>;
   explorationMap: ExplorationMap | null;
   lastUpdated: number;
-  /** LLM-generated label overrides, keyed by cluster ID. Separate from
-   *  clusters so that periodic setAll() doesn't overwrite them. */
+  /** LLM-generated label overrides, keyed by content-based fingerprint
+   *  (clusterFingerprint()). Separate from clusters so that periodic
+   *  setAll() doesn't overwrite them. */
   clusterLabelOverrides: Map<string, string>;
 
   setGraphData: (nodes: GraphNode[], edges: GraphEdge[]) => void;

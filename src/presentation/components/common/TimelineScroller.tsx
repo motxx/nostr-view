@@ -31,6 +31,7 @@ export function TimelineScroller({
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
 
   // ── Pull-to-refresh (pull down at top) ──
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -68,22 +69,28 @@ export function TimelineScroller({
   }, [pullDistance, refreshing, onRefresh]);
 
   // ── Load older (scroll to bottom) ──
+  // Use ref-based guard to prevent re-triggering when state flips.
+  // Observer stays stable (no loadingOlder in deps).
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel || !hasMore) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !loadingOlder) {
+        if (entry.isIntersecting && !loadingOlderRef.current) {
+          loadingOlderRef.current = true;
           setLoadingOlder(true);
-          onLoadOlder().finally(() => setLoadingOlder(false));
+          onLoadOlder().finally(() => {
+            loadingOlderRef.current = false;
+            setLoadingOlder(false);
+          });
         }
       },
       { root: scrollRef.current, threshold: 0.1 },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loadingOlder, onLoadOlder]);
+  }, [hasMore, onLoadOlder]);
 
   return (
     <div

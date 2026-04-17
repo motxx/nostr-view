@@ -55,4 +55,17 @@ describe("clusterFingerprint", () => {
     const c = makeCluster({ id: "lang-Japanese", hashtags: [] });
     expect(clusterFingerprint(c)).toBe("lang-Japanese");
   });
+
+  it("clusters with identical top-5 but different 6th hashtag collide (known limitation)", () => {
+    const c1 = makeCluster({ hashtags: ["a", "b", "c", "d", "e", "extra1"] });
+    const c2 = makeCluster({ hashtags: ["a", "b", "c", "d", "e", "extra2"] });
+    // Top 5 sorted are identical → same fingerprint. This is a known design tradeoff.
+    expect(clusterFingerprint(c1)).toBe(clusterFingerprint(c2));
+  });
+
+  it("clusters with different top-5 hashtags do not collide", () => {
+    const c1 = makeCluster({ hashtags: ["bitcoin", "lightning"] });
+    const c2 = makeCluster({ hashtags: ["nostr", "zap"] });
+    expect(clusterFingerprint(c1)).not.toBe(clusterFingerprint(c2));
+  });
 });

@@ -28,7 +28,7 @@ function ImageGrid({ urls }: { urls: string[] }) {
   if (urls.length === 1) {
     return <InlineImage url={urls[0]} />;
   }
-  const cols = urls.length === 2 ? "grid-cols-2" : "grid-cols-2";
+  const cols = urls.length <= 2 ? "grid-cols-2" : "grid-cols-3";
   return (
     <div className={`grid ${cols} gap-1 mt-1 mb-1 max-h-64 overflow-hidden rounded border border-[#00ff41]/15`}>
       {urls.map((url) => (
@@ -110,6 +110,34 @@ function InlineVideo({ url }: { url: string }) {
     />
   );
 }
+
+function isSafeHref(href: string | undefined): boolean {
+  if (!href) return false;
+  return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("/");
+}
+
+const markdownComponents = {
+  p: ({ children }: { children?: React.ReactNode }) => <span className="whitespace-pre-wrap">{children}</span>,
+  a: ({ href, children }: { href?: string; children?: React.ReactNode }) =>
+    isSafeHref(href) ? (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[#0ff]/60 hover:text-[#0ff] underline underline-offset-2">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    ),
+  strong: ({ children }: { children?: React.ReactNode }) => <strong className="text-[#00ff41]/80 font-bold">{children}</strong>,
+  em: ({ children }: { children?: React.ReactNode }) => <em className="text-[#00ff41]/70 italic">{children}</em>,
+  code: ({ children }: { children?: React.ReactNode }) => <code className="bg-[#00ff41]/10 text-[#0ff]/70 px-1 rounded text-[0.9em]">{children}</code>,
+  pre: ({ children }: { children?: React.ReactNode }) => <pre className="bg-[#00ff41]/5 border border-[#00ff41]/10 rounded p-2 my-1 overflow-x-auto text-[0.9em]">{children}</pre>,
+  ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-inside my-0.5">{children}</ul>,
+  ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-inside my-0.5">{children}</ol>,
+  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="border-l-2 border-[#00ff41]/30 pl-2 my-0.5 text-[#00ff41]/50 italic">{children}</blockquote>,
+  h1: ({ children }: { children?: React.ReactNode }) => <span className="font-bold text-[#00ff41]/90 text-[1.1em]">{children}</span>,
+  h2: ({ children }: { children?: React.ReactNode }) => <span className="font-bold text-[#00ff41]/85 text-[1.05em]">{children}</span>,
+  h3: ({ children }: { children?: React.ReactNode }) => <span className="font-bold text-[#00ff41]/80">{children}</span>,
+  img: () => null,
+};
 
 interface NoteContentProps {
   content: string;
@@ -217,30 +245,7 @@ export function NoteContent({ content, maxLen, className, onHashtagClick }: Note
             #{seg.tag}
           </button>
         ) : (
-          <Markdown
-            key={i}
-            components={{
-              // Keep all rendered elements inline-friendly and styled to match the theme
-              p: ({ children }) => <span className="whitespace-pre-wrap">{children}</span>,
-              a: ({ href, children }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0ff]/60 hover:text-[#0ff] underline underline-offset-2">
-                  {children}
-                </a>
-              ),
-              strong: ({ children }) => <strong className="text-[#00ff41]/80 font-bold">{children}</strong>,
-              em: ({ children }) => <em className="text-[#00ff41]/70 italic">{children}</em>,
-              code: ({ children }) => <code className="bg-[#00ff41]/10 text-[#0ff]/70 px-1 rounded text-[0.9em]">{children}</code>,
-              pre: ({ children }) => <pre className="bg-[#00ff41]/5 border border-[#00ff41]/10 rounded p-2 my-1 overflow-x-auto text-[0.9em]">{children}</pre>,
-              ul: ({ children }) => <ul className="list-disc list-inside my-0.5">{children}</ul>,
-              ol: ({ children }) => <ol className="list-decimal list-inside my-0.5">{children}</ol>,
-              blockquote: ({ children }) => <blockquote className="border-l-2 border-[#00ff41]/30 pl-2 my-0.5 text-[#00ff41]/50 italic">{children}</blockquote>,
-              h1: ({ children }) => <span className="font-bold text-[#00ff41]/90 text-[1.1em]">{children}</span>,
-              h2: ({ children }) => <span className="font-bold text-[#00ff41]/85 text-[1.05em]">{children}</span>,
-              h3: ({ children }) => <span className="font-bold text-[#00ff41]/80">{children}</span>,
-              // Prevent Markdown from rendering its own images (handled by parseNoteContent)
-              img: () => null,
-            }}
-          >
+          <Markdown key={i} components={markdownComponents}>
             {seg.value}
           </Markdown>
         ),

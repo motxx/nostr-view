@@ -44,7 +44,11 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
   const [hasMore, setHasMore] = useState(true);
 
   const handleTagClick = (tag: string) => {
-    setFilterTag((prev) => (prev === tag ? null : tag));
+    setFilterTag((prev) => {
+      const next = prev === tag ? null : tag;
+      setHasMore(true);
+      return next;
+    });
   };
 
   const handleRefresh = useCallback(async () => {
