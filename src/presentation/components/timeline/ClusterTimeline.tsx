@@ -1,12 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useClusterTimeline } from "@/presentation/hooks/useClusterDetection";
 import { useActivityStore } from "@/store/activity-store";
+import { useEventStore } from "@/store/event-store";
 import { filterByHashtag } from "@/domain/entities/nostr-event";
+import {
+  fetchOlderAuthorNotes,
+  fetchRecentNotes,
+  fetchProfiles,
+} from "@/infra/nostr/event-fetcher";
 import { NoteCard } from "./NoteCard";
 import { Badge } from "@/components/ui/badge";
 import { useNowSec } from "@/lib/use-now-sec";
+import { TimelineScroller } from "@/presentation/components/common/TimelineScroller";
 
 interface ClusterTimelineProps {
   clusterId: string | null;
@@ -34,9 +41,51 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
     [events, filterTag],
   );
 
+  const [hasMore, setHasMore] = useState(true);
+
   const handleTagClick = (tag: string) => {
     setFilterTag((prev) => (prev === tag ? null : tag));
   };
+
+  const handleRefresh = useCallback(async () => {
+    const latest = events[0];
+    const since = latest ? latest.created_at : Math.floor(Date.now() / 1000) - 300;
+    const newEvents = await fetchRecentNotes(since, 200);
+    if (newEvents.length > 0) {
+      useEventStore.getState().addEvents(newEvents);
+      const unknownPks = [
+        ...new Set(
+          newEvents.map((e) => e.pubkey).filter((pk) => !useEventStore.getState().profiles.has(pk)),
+        ),
+      ].slice(0, 50);
+      if (unknownPks.length > 0) {
+        const profileEvents = await fetchProfiles(unknownPks);
+        useEventStore.getState().addEvents(profileEvents);
+      }
+    }
+  }, [events]);
+
+  const handleLoadOlder = useCallback(async () => {
+    if (!cluster) return;
+    const oldest = filteredEvents.at(-1);
+    if (!oldest) return;
+    const pubkeys = [...cluster.memberPubkeys];
+    const olderEvents = await fetchOlderAuthorNotes(pubkeys, oldest.created_at, 100);
+    if (olderEvents.length === 0) {
+      setHasMore(false);
+      return;
+    }
+    useEventStore.getState().addEvents(olderEvents);
+    const unknownPks = [
+      ...new Set(
+        olderEvents.map((e) => e.pubkey).filter((pk) => !useEventStore.getState().profiles.has(pk)),
+      ),
+    ].slice(0, 50);
+    if (unknownPks.length > 0) {
+      const profileEvents = await fetchProfiles(unknownPks);
+      useEventStore.getState().addEvents(profileEvents);
+    }
+  }, [cluster, filteredEvents]);
 
   if (!cluster) {
     return (
@@ -91,7 +140,12 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
           </span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto osint-scroll px-3 py-2 space-y-2">
+      <TimelineScroller
+        onRefresh={handleRefresh}
+        onLoadOlder={handleLoadOlder}
+        hasMore={hasMore}
+        className="px-3 py-2 space-y-2"
+      >
         {filteredEvents.map((event) => (
           <NoteCard
             key={event.id}
@@ -105,7 +159,7 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
             {filterTag ? "No signals match filter" : "No signals intercepted"}
           </p>
         )}
-      </div>
+      </TimelineScroller>
     </div>
   );
 }

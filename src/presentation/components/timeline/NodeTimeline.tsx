@@ -1,12 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEventStore } from "@/store/event-store";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { primalProfileUrl } from "@/lib/nostr-url";
-import { fetchUserActivity, fetchProfiles } from "@/infra/nostr/event-fetcher";
+import {
+  fetchUserActivity,
+  fetchProfiles,
+  fetchOlderUserNotes,
+} from "@/infra/nostr/event-fetcher";
 import { NoteCard } from "./NoteCard";
+import { TimelineScroller } from "@/presentation/components/common/TimelineScroller";
 
 interface NodeTimelineProps {
   pubkey: string;
@@ -53,11 +58,40 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
       }
     }
     result.sort((a, b) => b.created_at - a.created_at);
-    return result.slice(0, 100);
+    return result;
   }, [pubkey, eventsById]);
+
+  const [hasMore, setHasMore] = useState(true);
+  const queryClient = useQueryClient();
 
   const ownCount = notes.filter((n) => n.pubkey === pubkey).length;
   const replyCount = notes.length - ownCount;
+
+  const handleRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["nostr", "user-activity", pubkey],
+    });
+  }, [pubkey, queryClient]);
+
+  const handleLoadOlder = useCallback(async () => {
+    const oldest = notes.at(-1);
+    if (!oldest) return;
+    const events = await fetchOlderUserNotes(pubkey, oldest.created_at);
+    if (events.length === 0) {
+      setHasMore(false);
+      return;
+    }
+    useEventStore.getState().addEvents(events);
+    const unknownPks = [
+      ...new Set(
+        events.map((e) => e.pubkey).filter((pk) => !useEventStore.getState().profiles.has(pk)),
+      ),
+    ].slice(0, 50);
+    if (unknownPks.length > 0) {
+      const profileEvents = await fetchProfiles(unknownPks);
+      useEventStore.getState().addEvents(profileEvents);
+    }
+  }, [pubkey, notes]);
 
   return (
     <div className="flex flex-col h-full">
@@ -92,7 +126,12 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
             : `${ownCount} signals, ${replyCount} intercepts`}
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto osint-scroll px-3 py-2 space-y-2">
+      <TimelineScroller
+        onRefresh={handleRefresh}
+        onLoadOlder={handleLoadOlder}
+        hasMore={hasMore}
+        className="px-3 py-2 space-y-2"
+      >
         {notes.map((event) => (
           <NoteCard
             key={event.id}
@@ -105,7 +144,7 @@ export function NodeTimeline({ pubkey }: NodeTimelineProps) {
             No signals intercepted
           </p>
         )}
-      </div>
+      </TimelineScroller>
     </div>
   );
 }

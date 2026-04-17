@@ -106,6 +106,60 @@ export async function fetchUserActivity(
   ];
 }
 
+export async function fetchOlderUserNotes(
+  pubkey: string,
+  until: number,
+  limit: number = 50,
+): Promise<NostrEvent[]> {
+  const [ownNotes, mentions] = await Promise.allSettled([
+    queryEvents([
+      {
+        kinds: [NOSTR_KIND.TEXT_NOTE],
+        authors: [pubkey],
+        until,
+        limit,
+      },
+    ]),
+    queryEvents([
+      {
+        kinds: [NOSTR_KIND.TEXT_NOTE, NOSTR_KIND.REACTION, NOSTR_KIND.REPOST],
+        "#p": [pubkey],
+        until,
+        limit,
+      },
+    ]),
+  ]);
+  return [
+    ...(ownNotes.status === "fulfilled" ? ownNotes.value : []),
+    ...(mentions.status === "fulfilled" ? mentions.value : []),
+  ];
+}
+
+export async function fetchOlderAuthorNotes(
+  pubkeys: string[],
+  until: number,
+  limit: number = 100,
+): Promise<NostrEvent[]> {
+  if (pubkeys.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < pubkeys.length; i += 50) {
+    chunks.push(pubkeys.slice(i, i + 50));
+  }
+  const results: NostrEvent[] = [];
+  for (const chunk of chunks) {
+    const events = await queryEvents([
+      {
+        kinds: [NOSTR_KIND.TEXT_NOTE],
+        authors: chunk,
+        until,
+        limit: Math.ceil(limit / chunks.length),
+      },
+    ]);
+    results.push(...events);
+  }
+  return results;
+}
+
 export function subscribeLiveNotes(
   onEvent: (event: NostrEvent) => void,
   onEose?: () => void,

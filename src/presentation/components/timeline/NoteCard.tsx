@@ -55,11 +55,19 @@ export function NoteCard({ event, profile, compact, onHashtagClick }: NoteCardPr
 
   const maxLen = compact ? 200 : 500;
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if the user clicked an interactive element inside the card
+    const target = e.target as HTMLElement;
+    if (target.closest("a, button, video, iframe")) return;
+    window.open(primalNoteUrl(event.id), "_blank", "noopener,noreferrer");
+  };
+
   return (
-    <a
-      href={primalNoteUrl(event.id)}
-      target="_blank"
-      rel="noopener noreferrer"
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => { if (e.key === "Enter") handleCardClick(e as unknown as React.MouseEvent); }}
       className="block rounded bg-[#00ff41]/[0.02] border border-[#00ff41]/10 hover:bg-[#00ff41]/[0.06] hover:border-[#00ff41]/20 transition-colors p-3 cursor-pointer"
     >
       <div className="flex items-start gap-3">
@@ -81,6 +89,6 @@ export function NoteCard({ event, profile, compact, onHashtagClick }: NoteCardPr
           />
         </div>
       </div>
-    </a>
+    </div>
   );
 }

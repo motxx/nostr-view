@@ -314,12 +314,18 @@ export function ClusterOverviewPanel() {
                       profile?.name ||
                       note.pubkey.slice(0, 8) + "…";
                     return (
-                      <a
+                      <div
                         key={note.id}
-                        href={primalNoteUrl(note.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block rounded bg-[#00ff41]/[0.02] hover:bg-[#00ff41]/[0.06] border border-[#00ff41]/5 hover:border-[#00ff41]/15 px-2 py-1.5 transition-colors"
+                        role="link"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest("a, button, video, iframe")) return;
+                          window.open(primalNoteUrl(note.id), "_blank", "noopener,noreferrer");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") window.open(primalNoteUrl(note.id), "_blank", "noopener,noreferrer");
+                        }}
+                        className="block rounded bg-[#00ff41]/[0.02] hover:bg-[#00ff41]/[0.06] border border-[#00ff41]/5 hover:border-[#00ff41]/15 px-2 py-1.5 transition-colors cursor-pointer"
                       >
                         <div className="font-mono text-[9px] text-[#0ff]/30 mb-0.5">
                           {name}
@@ -329,7 +335,7 @@ export function ClusterOverviewPanel() {
                           maxLen={140}
                           className="font-mono text-[10px] text-[#00ff41]/50 leading-relaxed"
                         />
-                      </a>
+                      </div>
                     );
                   })}
                 </div>
