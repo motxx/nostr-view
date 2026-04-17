@@ -97,6 +97,7 @@ export function ClusterTimeline({ clusterId }: ClusterTimelineProps) {
             key={event.id}
             event={event}
             profile={profiles?.get(event.pubkey)}
+            onHashtagClick={handleTagClick}
           />
         ))}
         {filteredEvents.length === 0 && (

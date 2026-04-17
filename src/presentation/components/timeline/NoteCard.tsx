@@ -10,6 +10,7 @@ interface NoteCardProps {
   event: NostrEvent;
   profile?: NostrProfile;
   compact?: boolean;
+  onHashtagClick?: (tag: string) => void;
 }
 
 function formatTime(timestamp: number): string {
@@ -46,7 +47,7 @@ function Avatar({ src, name }: { src?: string; name: string }) {
   );
 }
 
-export function NoteCard({ event, profile, compact }: NoteCardProps) {
+export function NoteCard({ event, profile, compact, onHashtagClick }: NoteCardProps) {
   const displayName =
     profile?.displayName ||
     profile?.name ||
@@ -76,6 +77,7 @@ export function NoteCard({ event, profile, compact }: NoteCardProps) {
             content={event.content}
             maxLen={maxLen}
             className="text-[11px] font-mono text-[#00ff41]/45 break-words leading-relaxed"
+            onHashtagClick={onHashtagClick}
           />
         </div>
       </div>
