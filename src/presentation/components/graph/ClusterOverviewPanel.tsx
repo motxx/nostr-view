@@ -17,6 +17,8 @@ import {
 import { primalNoteUrl, primalProfileUrl } from "@/lib/nostr-url";
 import { nip19 } from "nostr-tools";
 import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
+import { clusterFingerprint } from "@/domain/entities/cluster";
+import { NoteContent } from "@/presentation/components/common/NoteContent";
 
 const STRATEGIES: ClusterStrategy[] = ["topic", "interaction", "language"];
 
@@ -26,7 +28,7 @@ export function ClusterOverviewPanel() {
   const clusters = useMemo(() => {
     if (labelOverrides.size === 0) return rawClusters;
     return rawClusters.map((c) => {
-      const override = labelOverrides.get(c.id);
+      const override = labelOverrides.get(clusterFingerprint(c));
       return override ? { ...c, label: override } : c;
     });
   }, [rawClusters, labelOverrides]);
@@ -322,9 +324,11 @@ export function ClusterOverviewPanel() {
                         <div className="font-mono text-[9px] text-[#0ff]/30 mb-0.5">
                           {name}
                         </div>
-                        <div className="font-mono text-[10px] text-[#00ff41]/50 leading-relaxed line-clamp-2">
-                          {note.content.slice(0, 140)}
-                        </div>
+                        <NoteContent
+                          content={note.content}
+                          maxLen={140}
+                          className="font-mono text-[10px] text-[#00ff41]/50 leading-relaxed"
+                        />
                       </a>
                     );
                   })}

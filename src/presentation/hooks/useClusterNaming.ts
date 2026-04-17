@@ -5,6 +5,7 @@ import { useGraphStore } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
 import { useUIStore } from "@/store/ui-store";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
+import { clusterFingerprint } from "@/domain/entities/cluster";
 
 /**
  * After clusters are detected, asynchronously calls the LLM to generate
@@ -22,9 +23,9 @@ export function useClusterNaming() {
   const overrides = useGraphStore((s) => s.clusterLabelOverrides);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
 
-  // Derived during render: clusters not yet named by LLM
+  // Derived during render: clusters not yet named by LLM (keyed by fingerprint)
   const unnamedIds = clusters
-    .filter((c) => !overrides.has(c.id))
+    .filter((c) => !overrides.has(clusterFingerprint(c)))
     .map((c) => c.id)
     .sort()
     .join(",");
@@ -36,7 +37,9 @@ export function useClusterNaming() {
       // already named some of these clusters
       const currentClusters = useGraphStore.getState().clusters;
       const currentOverrides = useGraphStore.getState().clusterLabelOverrides;
-      const toName = currentClusters.filter((c) => !currentOverrides.has(c.id));
+      const toName = currentClusters.filter(
+        (c) => !currentOverrides.has(clusterFingerprint(c)),
+      );
       if (toName.length === 0) return 0;
 
       const allEvents = [...useEventStore.getState().eventsById.values()];
@@ -75,9 +78,17 @@ export function useClusterNaming() {
         throw new Error("Cluster naming API returned no results");
       }
 
+      // Build id→fingerprint mapping for the clusters we just named
+      const idToFingerprint = new Map<string, string>();
+      for (const c of toName) {
+        idToFingerprint.set(c.id, clusterFingerprint(c));
+      }
+
+      // Cache by fingerprint so labels survive cluster ID shifts on recompute
       const labelMap = new Map<string, string>();
       for (const r of results) {
-        if (r.id && r.label) labelMap.set(r.id, r.label);
+        const fp = idToFingerprint.get(r.id);
+        if (r.id && r.label && fp) labelMap.set(fp, r.label);
       }
 
       if (labelMap.size === 0) {

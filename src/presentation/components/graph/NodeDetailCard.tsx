@@ -7,6 +7,7 @@ import { useActivityStore } from "@/store/activity-store";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { primalProfileUrl, primalNoteUrl } from "@/lib/nostr-url";
 import { useMemo } from "react";
+import { NoteContent } from "@/presentation/components/common/NoteContent";
 
 function ExternalLinkIcon() {
   return (
@@ -125,9 +126,10 @@ export function NodeDetailCard() {
             <div className="font-mono text-[9px] text-[#0ff]/40 mb-1 uppercase tracking-wider">
               latest intercept
             </div>
-            <div className="font-mono text-[10px] text-[#00ff41]/60 leading-relaxed line-clamp-4 break-all">
-              {latestNote.content}
-            </div>
+            <NoteContent
+              content={latestNote.content}
+              className="font-mono text-[10px] text-[#00ff41]/60 leading-relaxed break-all"
+            />
           </div>
         )}
 

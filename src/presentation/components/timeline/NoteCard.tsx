@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import type { NostrProfile } from "@/domain/entities/nostr-profile";
 import { primalNoteUrl } from "@/lib/nostr-url";
+import { NoteContent } from "@/presentation/components/common/NoteContent";
 
 interface NoteCardProps {
   event: NostrEvent;
@@ -71,10 +72,11 @@ export function NoteCard({ event, profile, compact }: NoteCardProps) {
               {formatTime(event.created_at)}
             </span>
           </div>
-          <p className="text-[11px] font-mono text-[#00ff41]/45 break-words whitespace-pre-wrap leading-relaxed">
-            {event.content.slice(0, maxLen)}
-            {event.content.length > maxLen && "..."}
-          </p>
+          <NoteContent
+            content={event.content}
+            maxLen={maxLen}
+            className="text-[11px] font-mono text-[#00ff41]/45 break-words leading-relaxed"
+          />
         </div>
       </div>
     </a>

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useGraphStore } from "./graph-store";
 import type { GraphNode } from "@/domain/entities/graph-node";
 import type { GraphEdge } from "@/domain/entities/graph-edge";
-import type { Cluster } from "@/domain/entities/cluster";
+import { type Cluster, clusterFingerprint } from "@/domain/entities/cluster";
 import type { BridgeInfo } from "@/domain/services/cluster-summary";
 import type { ExplorationMap } from "@/domain/services/exploration-map";
 
@@ -127,27 +127,29 @@ describe("graph-store", () => {
       { id: "c2", label: "nostr", hashtags: ["nostr"], memberPubkeys: new Set(["b"]), color: "#0f0" },
       { id: "c3", label: "Community 1", hashtags: [], memberPubkeys: new Set(["c"]), color: "#00f" },
     ];
+    const fp1 = clusterFingerprint(clusters[0]); // "bitcoin"
+    const fp2 = clusterFingerprint(clusters[1]); // "nostr"
 
     beforeEach(() => {
       useGraphStore.getState().setClusters(clusters);
     });
 
     it("setClusterLabelOverrides merges into existing overrides", () => {
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c2", "Nostr Devs"]]));
+      useGraphStore.getState().setClusterLabelOverrides(new Map([[fp1, "BTC Maxis"]]));
+      useGraphStore.getState().setClusterLabelOverrides(new Map([[fp2, "Nostr Devs"]]));
       const overrides = useGraphStore.getState().clusterLabelOverrides;
-      expect(overrides.get("c1")).toBe("BTC Maxis");
-      expect(overrides.get("c2")).toBe("Nostr Devs");
+      expect(overrides.get(fp1)).toBe("BTC Maxis");
+      expect(overrides.get(fp2)).toBe("Nostr Devs");
     });
 
     it("clearClusterLabelOverrides empties the map", () => {
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      useGraphStore.getState().setClusterLabelOverrides(new Map([[fp1, "BTC Maxis"]]));
       useGraphStore.getState().clearClusterLabelOverrides();
       expect(useGraphStore.getState().clusterLabelOverrides.size).toBe(0);
     });
 
     it("setAll does not clear clusterLabelOverrides", () => {
-      useGraphStore.getState().setClusterLabelOverrides(new Map([["c1", "BTC Maxis"]]));
+      useGraphStore.getState().setClusterLabelOverrides(new Map([[fp1, "BTC Maxis"]]));
       useGraphStore.getState().setAll({
         clusters,
         nodes: [],
@@ -156,7 +158,34 @@ describe("graph-store", () => {
         explorationMap: null,
       });
       // Overrides survive setAll — this is the key invariant
-      expect(useGraphStore.getState().clusterLabelOverrides.get("c1")).toBe("BTC Maxis");
+      expect(useGraphStore.getState().clusterLabelOverrides.get(fp1)).toBe("BTC Maxis");
+    });
+
+    it("overrides survive cluster ID shifts across recomputes", () => {
+      // First compute: cluster gets ID "cluster-0"
+      const firstRun: Cluster[] = [
+        { id: "cluster-0", label: "btc, ln", hashtags: ["bitcoin", "lightning"], memberPubkeys: new Set(["a"]), color: "#f00" },
+      ];
+      const fp = clusterFingerprint(firstRun[0]); // "bitcoin+lightning"
+      useGraphStore.getState().setClusterLabelOverrides(new Map([[fp, "BTC & Lightning"]]));
+
+      // Second compute: same hashtags but ID shifted to "cluster-3"
+      const secondRun: Cluster[] = [
+        { id: "cluster-3", label: "btc, ln", hashtags: ["bitcoin", "lightning"], memberPubkeys: new Set(["a", "b"]), color: "#f00" },
+      ];
+      useGraphStore.getState().setAll({
+        clusters: secondRun,
+        nodes: [],
+        edges: [],
+        bridges: new Map(),
+        explorationMap: null,
+      });
+
+      // Fingerprint is the same → override still resolves
+      const override = useGraphStore.getState().clusterLabelOverrides.get(
+        clusterFingerprint(secondRun[0]),
+      );
+      expect(override).toBe("BTC & Lightning");
     });
   });
 
@@ -169,7 +198,7 @@ describe("graph-store", () => {
     function applyOverrides(cs: Cluster[], overrides: Map<string, string>): Cluster[] {
       if (overrides.size === 0) return cs;
       return cs.map((c) => {
-        const override = overrides.get(c.id);
+        const override = overrides.get(clusterFingerprint(c));
         return override ? { ...c, label: override } : c;
       });
     }
@@ -181,14 +210,16 @@ describe("graph-store", () => {
       expect(result).toBe(clusters); // same reference
     });
 
-    it("applies overrides to matching cluster IDs", () => {
-      const result = applyOverrides(clusters, new Map([["c1", "BTC Maxis"]]));
+    it("applies overrides to matching cluster fingerprints", () => {
+      const fp1 = clusterFingerprint(clusters[0]);
+      const result = applyOverrides(clusters, new Map([[fp1, "BTC Maxis"]]));
       expect(result[0].label).toBe("BTC Maxis");
       expect(result[1].label).toBe("nostr");
     });
 
     it("does not mutate original cluster objects", () => {
-      applyOverrides(clusters, new Map([["c1", "BTC Maxis"]]));
+      const fp1 = clusterFingerprint(clusters[0]);
+      applyOverrides(clusters, new Map([[fp1, "BTC Maxis"]]));
       expect(clusters[0].label).toBe("bitcoin");
     });
   });

@@ -5,6 +5,7 @@ import { useGraphStore } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
+import { clusterFingerprint } from "@/domain/entities/cluster";
 
 export function useClusterTimeline(clusterId: string | null) {
   const rawClusters = useGraphStore((s) => s.clusters);
@@ -15,7 +16,7 @@ export function useClusterTimeline(clusterId: string | null) {
   const clusters = useMemo(() => {
     if (labelOverrides.size === 0) return rawClusters;
     return rawClusters.map((c) => {
-      const override = labelOverrides.get(c.id);
+      const override = labelOverrides.get(clusterFingerprint(c));
       return override ? { ...c, label: override } : c;
     });
   }, [rawClusters, labelOverrides]);

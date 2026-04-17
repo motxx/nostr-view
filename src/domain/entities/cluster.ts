@@ -25,3 +25,16 @@ const CLUSTER_COLORS = [
 export function getClusterColor(index: number): string {
   return CLUSTER_COLORS[index % CLUSTER_COLORS.length];
 }
+
+/**
+ * Content-based fingerprint for caching LLM-generated labels.
+ * Stable across graph recomputes as long as the cluster's top hashtags
+ * remain the same, regardless of positional ID shifts.
+ */
+export function clusterFingerprint(cluster: Cluster): string {
+  if (cluster.hashtags.length > 0) {
+    return [...cluster.hashtags].sort().slice(0, 5).join("+");
+  }
+  // Language clusters with no hashtags — ID is already stable (lang-Japanese etc.)
+  return cluster.id;
+}
