@@ -65,6 +65,6 @@ export function useGraphData() {
     },
     enabled: totalEvents >= 50,
     refetchInterval: 10_000,
-    staleTime: 10_000,
+    staleTime: 0,
   });
 }
