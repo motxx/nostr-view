@@ -26,20 +26,18 @@ export function SidebarPanel({ title, onBack, children }: SidebarPanelProps) {
       >
         {/* Panel header */}
         <div className="px-3 py-1.5 border-b border-[#00ff41]/15 bg-[#00ff41]/5 flex items-center gap-2">
-          {/* Mobile close / desktop back */}
+          {/* Mobile close — always closes the drawer */}
           <button
-            onClick={() => {
-              if (onBack) onBack();
-              else setSidebarOpen(false);
-            }}
+            onClick={() => setSidebarOpen(false)}
             className="font-mono text-[9px] text-[#00ff41]/40 hover:text-[#00ff41]/70 transition-colors md:hidden"
           >
             [×]
           </button>
+          {/* Back button — mobile + desktop */}
           {onBack && (
             <button
               onClick={onBack}
-              className="font-mono text-[9px] text-[#00ff41]/40 hover:text-[#00ff41]/70 transition-colors hidden md:block"
+              className="font-mono text-[9px] text-[#00ff41]/40 hover:text-[#00ff41]/70 transition-colors"
             >
               [←]
             </button>

@@ -64,14 +64,18 @@ export const useUIStore = create<UIStore>((set, get) => ({
   selectCluster: (clusterId) =>
     set({
       selectedClusterId: clusterId,
+      selectedNodeId: null,
       isTimelinePanelOpen: clusterId !== null,
+      ...(clusterId !== null ? { isSidebarOpen: true } : {}),
     }),
 
   selectNode: (nodeId) =>
-    set({
+    set((state) => ({
       selectedNodeId: nodeId,
-      isTimelinePanelOpen: nodeId !== null,
-    }),
+      isTimelinePanelOpen:
+        nodeId !== null || state.selectedClusterId !== null,
+      ...(nodeId !== null ? { isSidebarOpen: true } : {}),
+    })),
 
   setTimelinePanelOpen: (open) =>
     set({

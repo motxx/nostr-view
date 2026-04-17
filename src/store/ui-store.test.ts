@@ -32,6 +32,21 @@ describe("ui-store", () => {
       expect(s.selectedNodeId).toBeNull();
       expect(s.isTimelinePanelOpen).toBe(false);
     });
+
+    it("keeps timeline open when deselecting node while cluster is selected", () => {
+      useUIStore.getState().selectCluster("c1");
+      useUIStore.getState().selectNode("alice");
+      useUIStore.getState().selectNode(null);
+      const s = useUIStore.getState();
+      expect(s.selectedNodeId).toBeNull();
+      expect(s.selectedClusterId).toBe("c1");
+      expect(s.isTimelinePanelOpen).toBe(true);
+    });
+
+    it("opens sidebar when selecting a node", () => {
+      useUIStore.getState().selectNode("alice");
+      expect(useUIStore.getState().isSidebarOpen).toBe(true);
+    });
   });
 
   describe("selectCluster", () => {
@@ -40,6 +55,20 @@ describe("ui-store", () => {
       const s = useUIStore.getState();
       expect(s.selectedClusterId).toBe("c1");
       expect(s.isTimelinePanelOpen).toBe(true);
+    });
+
+    it("clears selectedNodeId when selecting a cluster", () => {
+      useUIStore.getState().selectNode("alice");
+      useUIStore.getState().selectCluster("c1");
+      const s = useUIStore.getState();
+      expect(s.selectedNodeId).toBeNull();
+      expect(s.selectedClusterId).toBe("c1");
+      expect(s.isTimelinePanelOpen).toBe(true);
+    });
+
+    it("opens sidebar when selecting a cluster", () => {
+      useUIStore.getState().selectCluster("c1");
+      expect(useUIStore.getState().isSidebarOpen).toBe(true);
     });
   });
 
