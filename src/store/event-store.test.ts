@@ -82,6 +82,35 @@ describe("event-store", () => {
       useEventStore.getState().addEvents([ev, makeEvent()]);
       expect(useEventStore.getState().totalEvents).toBe(2);
     });
+
+    it("creates a new profiles reference when metadata events are included", () => {
+      const profilesBefore = useEventStore.getState().profiles;
+      useEventStore.getState().addEvents([
+        makeEvent({
+          kind: NOSTR_KIND.METADATA,
+          pubkey: "alice",
+          content: JSON.stringify({ name: "Alice" }),
+        }),
+      ]);
+      const profilesAfter = useEventStore.getState().profiles;
+      expect(profilesAfter).not.toBe(profilesBefore);
+      expect(profilesAfter.get("alice")?.name).toBe("Alice");
+    });
+
+    it("does not change profiles reference when no metadata events", () => {
+      // Seed with a profile so profiles is non-empty
+      useEventStore.getState().addEvent(
+        makeEvent({
+          kind: NOSTR_KIND.METADATA,
+          pubkey: "bob",
+          content: JSON.stringify({ name: "Bob" }),
+        }),
+      );
+      const profilesBefore = useEventStore.getState().profiles;
+      useEventStore.getState().addEvents([makeEvent()]);
+      const profilesAfter = useEventStore.getState().profiles;
+      expect(profilesAfter).toBe(profilesBefore);
+    });
   });
 
   describe("getAllEvents", () => {

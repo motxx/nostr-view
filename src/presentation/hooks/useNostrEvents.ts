@@ -79,15 +79,34 @@ export function useNostrEvents() {
   // an external system (WebSocket relay connection). Per Dan Abramov:
   // "Effects let you synchronize your component with an external system."
   useEffect(() => {
+    // Buffer incoming events and flush as a batch every 200ms.
+    // This reduces per-event Map copies and store updates from N to 1.
+    let buffer: import("@/domain/entities/nostr-event").NostrEvent[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      flushTimer = null;
+      if (buffer.length === 0) return;
+      const batch = buffer;
+      buffer = [];
+
+      useEventStore.getState().addEvents(batch);
+
+      const textNotes = batch.filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE);
+      if (textNotes.length > 0) {
+        useActivityStore
+          .getState()
+          .recordLiveEvents(
+            textNotes.map((e) => ({ pubkey: e.pubkey, createdAt: e.created_at })),
+          );
+      }
+    };
+
     const sub = subscribeLiveNotes(
       (event) => {
-        useEventStore.getState().addEvent(event);
-        if (event.kind === NOSTR_KIND.TEXT_NOTE) {
-          useActivityStore
-            .getState()
-            .updateActivity(event.pubkey, event.created_at);
-          useActivityStore.getState().addFlash(event.pubkey);
-          useActivityStore.getState().recordEventArrival();
+        buffer.push(event);
+        if (!flushTimer) {
+          flushTimer = setTimeout(flush, 200);
         }
       },
       () => useEventStore.getState().setConnectionStatus("connected"),
@@ -95,6 +114,8 @@ export function useNostrEvents() {
     subscriptionManager.add("live-notes", sub);
 
     return () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flush(); // flush remaining events
       subscriptionManager.closeAll();
       closePool();
     };

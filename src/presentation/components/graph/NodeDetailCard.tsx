@@ -21,21 +21,22 @@ function ExternalLinkIcon() {
 export function NodeDetailCard() {
   const selectedNodeId = useUIStore((s) => s.selectedNodeId);
   const selectNode = useUIStore((s) => s.selectNode);
+  // Subscribe to nodes array (changes on graph recompute ~10s) to keep card fresh
   const nodes = useGraphStore((s) => s.nodes);
-  const profiles = useEventStore((s) => s.profiles);
-  const eventsByAuthor = useEventStore((s) => s.eventsByAuthor);
-  const lastPostTime = useActivityStore((s) => s.lastPostTime);
 
   const node = useMemo(
-    () => nodes.find((n) => n.id === selectedNodeId),
-    [nodes, selectedNodeId],
+    () => selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : undefined,
+    [selectedNodeId, nodes],
   );
 
+  const profiles = useEventStore((s) => s.profiles);
   const profile = selectedNodeId ? profiles.get(selectedNodeId) : undefined;
+
+  const lastPostTime = useActivityStore((s) => s.lastPostTime);
 
   const latestNote = useMemo(() => {
     if (!selectedNodeId) return undefined;
-    const authorEvents = eventsByAuthor.get(selectedNodeId);
+    const authorEvents = useEventStore.getState().eventsByAuthor.get(selectedNodeId);
     if (!authorEvents) return undefined;
     let latest:
       | { id: string; content: string; created_at: number }
@@ -47,7 +48,7 @@ export function NodeDetailCard() {
       }
     }
     return latest;
-  }, [selectedNodeId, eventsByAuthor]);
+  }, [selectedNodeId]);
 
   if (!selectedNodeId || !node) return null;
 

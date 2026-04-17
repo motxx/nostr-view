@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, memo } from "react";
 import { type ThreeEvent } from "@react-three/fiber";
 import { influenceToColor, influenceToSize, tierBrightness } from "@/lib/graph-math";
 import { SignalSprite } from "./visuals/SignalSprite";
@@ -7,7 +7,7 @@ import { LabelSprite } from "./visuals/LabelSprite";
 import { RadarPulse } from "./visuals/RadarPulse";
 import type { GraphNodeData } from "./graph-types";
 
-export function GraphNode({
+export const GraphNode = memo(function GraphNode({
   node,
   onSelect,
   onHover,
@@ -76,4 +76,4 @@ export function GraphNode({
       )}
     </group>
   );
-}
+});

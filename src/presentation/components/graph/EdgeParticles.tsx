@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useUIStore } from "@/store/ui-store";
@@ -61,12 +61,17 @@ export function EdgeParticles({ simState }: { simState: React.RefObject<SimState
   // Build edge endpoints list for spawnParticles (derived from sim links)
   const edgesRef = useRef<EdgeEndpoints[]>([]);
 
+  // Cache selectedNodeId via subscribe to avoid getState() every frame
+  const selectedNodeIdRef = useRef<string | null>(useUIStore.getState().selectedNodeId);
+  useEffect(() => useUIStore.subscribe(
+    (state) => { selectedNodeIdRef.current = state.selectedNodeId; },
+  ), []);
+
   useFrame((_, delta) => {
     const s = simState.current;
     if (!s) return;
 
-    const ui = useUIStore.getState();
-    const activeId = ui.selectedNodeId;
+    const activeId = selectedNodeIdRef.current;
     const pool = poolRef.current;
     /* eslint-disable react-hooks/immutability -- Three.js buffer mutation in useFrame */
     const posAttr = particleGeom.attributes.position as THREE.BufferAttribute;

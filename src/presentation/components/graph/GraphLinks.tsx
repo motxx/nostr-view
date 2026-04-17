@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGraphStore } from "@/store/graph-store";
@@ -7,8 +7,45 @@ import { isEdgeActive, type EdgeActiveContext } from "@/lib/graph-math";
 import { buildConnectedSet, buildClusterMemberSet } from "./graph-helpers";
 import type { SimState } from "./graph-types";
 
+/** Cached UI state to avoid getState() calls every frame */
+interface CachedUIState {
+  selectedNodeId: string | null;
+  hoveredNodeId: string | null;
+  selectedClusterId: string | null;
+}
+
 export function GraphLinks({ simState }: { simState: React.RefObject<SimState | null> }) {
   const lineRef = useRef<THREE.LineSegments>(null);
+
+  // Subscribe to UI store changes via ref
+  const uiRef = useRef<CachedUIState>({
+    selectedNodeId: useUIStore.getState().selectedNodeId,
+    hoveredNodeId: useUIStore.getState().hoveredNodeId,
+    selectedClusterId: useUIStore.getState().selectedClusterId,
+  });
+  useEffect(() => useUIStore.subscribe((state) => {
+    uiRef.current.selectedNodeId = state.selectedNodeId;
+    uiRef.current.hoveredNodeId = state.hoveredNodeId;
+    uiRef.current.selectedClusterId = state.selectedClusterId;
+  }), []);
+
+  // Cache computed sets to avoid rebuilding every frame
+  const prevActiveIdRef = useRef<string | null>(null);
+  const prevSelectedClusterIdRef = useRef<string | null>(null);
+  const connectedCacheRef = useRef<Set<string> | null>(null);
+  const clusterMembersCacheRef = useRef<Set<string> | null>(null);
+  const clusterColorCacheRef = useRef<THREE.Color | null>(null);
+
+  // Cache cluster color map from graph store + invalidate connection cache on edge changes
+  const clusterColorMapRef = useRef(new Map<string, string>());
+  useEffect(() => useGraphStore.subscribe((state) => {
+    const map = clusterColorMapRef.current;
+    map.clear();
+    for (const c of state.clusters) map.set(c.id, c.color);
+    // Invalidate connected/cluster caches so they rebuild with new edges
+    prevActiveIdRef.current = null;
+    prevSelectedClusterIdRef.current = null;
+  }), []);
 
   const maxLinks = 2000;
   const positions = useMemo(() => new Float32Array(maxLinks * 6), []);
@@ -33,19 +70,32 @@ export function GraphLinks({ simState }: { simState: React.RefObject<SimState | 
     const pos = posAttr.array as Float32Array;
     const col = colAttr.array as Float32Array;
 
-    // Determine which node/cluster is active
-    const ui = useUIStore.getState();
+    // Read cached UI state (no getState() call)
+    const ui = uiRef.current;
     const activeId = ui.selectedNodeId ?? ui.hoveredNodeId;
-    const connected = activeId ? buildConnectedSet(activeId) : null;
     const selectedClusterId = ui.selectedClusterId;
-    const clusterMembers = (!activeId && selectedClusterId)
-      ? buildClusterMemberSet(selectedClusterId)
-      : null;
-    const clusterColor = clusterMembers && selectedClusterId
-      ? new THREE.Color(
-          useGraphStore.getState().clusters.find((c) => c.id === selectedClusterId)?.color ?? "#00ff41",
-        )
-      : null;
+
+    // Rebuild connected set only when activeId changes
+    if (activeId !== prevActiveIdRef.current) {
+      prevActiveIdRef.current = activeId;
+      connectedCacheRef.current = activeId ? buildConnectedSet(activeId) : null;
+    }
+    const connected = connectedCacheRef.current;
+
+    // Rebuild cluster members only when selectedClusterId changes
+    if (selectedClusterId !== prevSelectedClusterIdRef.current) {
+      prevSelectedClusterIdRef.current = selectedClusterId;
+      if (!activeId && selectedClusterId) {
+        clusterMembersCacheRef.current = buildClusterMemberSet(selectedClusterId);
+        const hex = clusterColorMapRef.current.get(selectedClusterId) ?? "#00ff41";
+        clusterColorCacheRef.current = new THREE.Color(hex);
+      } else {
+        clusterMembersCacheRef.current = null;
+        clusterColorCacheRef.current = null;
+      }
+    }
+    const clusterMembers = (!activeId && selectedClusterId) ? clusterMembersCacheRef.current : null;
+    const clusterColor = clusterMembers ? clusterColorCacheRef.current : null;
     const edgeCtx: EdgeActiveContext = {
       connectedSet: connected,
       activeNodeId: activeId,

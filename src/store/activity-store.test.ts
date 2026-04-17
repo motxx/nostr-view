@@ -103,6 +103,36 @@ describe("activity-store", () => {
     });
   });
 
+  describe("recordLiveEvents", () => {
+    it("updates activity, flash, and rate in one call", () => {
+      useActivityStore.getState().recordLiveEvents([
+        { pubkey: "alice", createdAt: 1000 },
+        { pubkey: "bob", createdAt: 2000 },
+      ]);
+      const state = useActivityStore.getState();
+      expect(state.lastPostTime.get("alice")).toBe(1000);
+      expect(state.lastPostTime.get("bob")).toBe(2000);
+      expect(state.flashQueue.has("alice")).toBe(true);
+      expect(state.flashQueue.has("bob")).toBe(true);
+      expect(state._eventArrivals.length).toBe(2);
+      expect(state.eventRate).toBeCloseTo(2 / 60, 2);
+    });
+
+    it("keeps latest timestamp per pubkey", () => {
+      useActivityStore.getState().recordLiveEvents([
+        { pubkey: "alice", createdAt: 1000 },
+        { pubkey: "alice", createdAt: 3000 },
+      ]);
+      expect(useActivityStore.getState().lastPostTime.get("alice")).toBe(3000);
+    });
+
+    it("is a no-op for empty array", () => {
+      useActivityStore.getState().recordLiveEvents([]);
+      expect(useActivityStore.getState().lastPostTime.size).toBe(0);
+      expect(useActivityStore.getState()._eventArrivals.length).toBe(0);
+    });
+  });
+
   describe("eventRate", () => {
     it("recordEventArrival increases eventRate", () => {
       useActivityStore.getState().recordEventArrival();

@@ -19,6 +19,8 @@ interface ActivityStore {
   updateActivity: (pubkey: string, createdAt: number) => void;
   updateActivities: (entries: { pubkey: string; createdAt: number }[]) => void;
   addFlash: (pubkey: string) => void;
+  /** Batch: update activity + flash + arrival for N events in one store update */
+  recordLiveEvents: (entries: { pubkey: string; createdAt: number }[]) => void;
   clearExpiredFlashes: (now: number, ttlMs?: number) => void;
   recordEventArrival: () => void;
 }
@@ -82,12 +84,36 @@ export const useActivityStore = create<ActivityStore>((set, get) => ({
     }
   },
 
+  recordLiveEvents: (entries) => {
+    if (entries.length === 0) return;
+    const state = get();
+    const now = Date.now();
+    for (const { pubkey, createdAt } of entries) {
+      const existing = state.lastPostTime.get(pubkey);
+      if (existing === undefined || existing < createdAt) {
+        state.lastPostTime.set(pubkey, createdAt);
+      }
+      state.flashQueue.add(pubkey);
+      state.flashTimestamps.set(pubkey, now);
+    }
+    const cutoff = now - EVENT_RATE_WINDOW_S * 1000;
+    const arrivals = state._eventArrivals.filter((t) => t > cutoff);
+    for (let i = 0; i < entries.length; i++) arrivals.push(now);
+    set({
+      lastPostTime: state.lastPostTime,
+      flashQueue: state.flashQueue,
+      flashTimestamps: state.flashTimestamps,
+      _eventArrivals: arrivals,
+      eventRate: arrivals.length / EVENT_RATE_WINDOW_S,
+    });
+  },
+
   recordEventArrival: () => {
     const state = get();
     const now = Date.now();
     const cutoff = now - EVENT_RATE_WINDOW_S * 1000;
-    const arrivals = [...state._eventArrivals.filter((t) => t > cutoff), now];
-    const rate = arrivals.length / EVENT_RATE_WINDOW_S;
-    set({ _eventArrivals: arrivals, eventRate: rate });
+    const arrivals = state._eventArrivals.filter((t) => t > cutoff);
+    arrivals.push(now);
+    set({ _eventArrivals: arrivals, eventRate: arrivals.length / EVENT_RATE_WINDOW_S });
   },
 }));

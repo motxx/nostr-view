@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo } from "react";
+import { useCallback, useRef, useMemo, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import {
@@ -125,8 +125,15 @@ export function ForceGraphScene() {
     simStateRef.current = { sim, nodes: simNodes, links: simLinks, nodeMap };
   }, [graphNodes, graphLinks, clusterStrategy]);
 
+  // Subscribe to selectedClusterId via ref to avoid getState() every frame
+  const selectedClusterIdRef = useRef<string | null>(useUIStore.getState().selectedClusterId);
+  useEffect(() => useUIStore.subscribe(
+    (state) => { selectedClusterIdRef.current = state.selectedClusterId; },
+  ), []);
+
   // Tick simulation + update node positions + cluster dim each frame
   const prevClusterIdRef = useRef<string | null>(null);
+  const lastFlashClearRef = useRef(0);
   useFrame(() => {
     const s = simStateRef.current;
     if (!s) return;
@@ -141,8 +148,7 @@ export function ForceGraphScene() {
     }
 
     // Dim non-cluster nodes when a cluster is selected
-    const ui = useUIStore.getState();
-    const clusterId = ui.selectedClusterId;
+    const clusterId = selectedClusterIdRef.current;
     if (clusterId !== prevClusterIdRef.current) {
       prevClusterIdRef.current = clusterId;
       const members = clusterId ? buildClusterMemberSet(clusterId) : null;
@@ -159,8 +165,12 @@ export function ForceGraphScene() {
       }
     }
 
-    // Clear expired flash entries
-    useActivityStore.getState().clearExpiredFlashes(Date.now());
+    // Clear expired flash entries (throttled to every 500ms)
+    const now = Date.now();
+    if (now - lastFlashClearRef.current > 500) {
+      lastFlashClearRef.current = now;
+      useActivityStore.getState().clearExpiredFlashes(now);
+    }
   });
 
   // Register UI callbacks — done in useFrame's first tick (not during render)

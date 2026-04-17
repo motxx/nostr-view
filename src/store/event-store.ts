@@ -4,8 +4,20 @@ import type { NostrProfile } from "@/domain/entities/nostr-profile";
 import { parseProfileContent } from "@/domain/entities/nostr-profile";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 
+/**
+ * PERF NOTE — Mutate-in-place pattern
+ *
+ * eventsById / eventsByKind / eventsByAuthor are mutated in place for
+ * performance (avoids copying large Maps on every event). Zustand
+ * subscribers using (s) => s.eventsById will NOT re-render because
+ * the Map reference never changes. Use totalEvents (a number) as the
+ * change signal instead, and read data via getState() when needed.
+ *
+ * profiles is the exception: a new Map reference is created when
+ * metadata changes, so (s) => s.profiles works as a normal selector.
+ */
 interface EventStore {
-  // Indexed events
+  // Indexed events (mutated in place — see note above)
   eventsById: Map<string, NostrEvent>;
   eventsByKind: Map<number, Map<string, NostrEvent>>;
   eventsByAuthor: Map<string, Map<string, NostrEvent>>;
@@ -36,86 +48,80 @@ export const useEventStore = create<EventStore>((set, get) => ({
     const state = get();
     if (state.eventsById.has(event.id)) return;
 
-    const newEventsById = new Map(state.eventsById);
-    newEventsById.set(event.id, event);
+    // Mutate existing maps in place, then set new references only for
+    // maps that changed. This avoids copying the entire Map per event.
+    state.eventsById.set(event.id, event);
 
-    const newEventsByKind = new Map(state.eventsByKind);
-    if (!newEventsByKind.has(event.kind)) {
-      newEventsByKind.set(event.kind, new Map());
+    if (!state.eventsByKind.has(event.kind)) {
+      state.eventsByKind.set(event.kind, new Map());
     }
-    newEventsByKind.get(event.kind)!.set(event.id, event);
+    state.eventsByKind.get(event.kind)!.set(event.id, event);
 
-    const newEventsByAuthor = new Map(state.eventsByAuthor);
-    if (!newEventsByAuthor.has(event.pubkey)) {
-      newEventsByAuthor.set(event.pubkey, new Map());
+    if (!state.eventsByAuthor.has(event.pubkey)) {
+      state.eventsByAuthor.set(event.pubkey, new Map());
     }
-    newEventsByAuthor.get(event.pubkey)!.set(event.id, event);
+    state.eventsByAuthor.get(event.pubkey)!.set(event.id, event);
 
-    // Handle profile events
-    const newProfiles = new Map(state.profiles);
+    const patch: Partial<EventStore> = {
+      totalEvents: state.eventsById.size,
+    };
+
     if (event.kind === NOSTR_KIND.METADATA) {
-      const existing = newProfiles.get(event.pubkey);
+      const existing = state.profiles.get(event.pubkey);
       if (!existing || existing.fetchedAt < event.created_at * 1000) {
-        newProfiles.set(
+        state.profiles.set(
           event.pubkey,
           parseProfileContent(event.pubkey, event.content),
         );
+        // New reference so (s) => s.profiles selectors re-render
+        patch.profiles = new Map(state.profiles);
       }
     }
 
-    set({
-      eventsById: newEventsById,
-      eventsByKind: newEventsByKind,
-      eventsByAuthor: newEventsByAuthor,
-      profiles: newProfiles,
-      totalEvents: newEventsById.size,
-    });
+    set(patch);
   },
 
   addEvents: (events: NostrEvent[]) => {
     const state = get();
-    const newEventsById = new Map(state.eventsById);
-    const newEventsByKind = new Map(state.eventsByKind);
-    const newEventsByAuthor = new Map(state.eventsByAuthor);
-    const newProfiles = new Map(state.profiles);
-
     let changed = false;
+    let profilesChanged = false;
 
     for (const event of events) {
-      if (newEventsById.has(event.id)) continue;
+      if (state.eventsById.has(event.id)) continue;
       changed = true;
 
-      newEventsById.set(event.id, event);
+      state.eventsById.set(event.id, event);
 
-      if (!newEventsByKind.has(event.kind)) {
-        newEventsByKind.set(event.kind, new Map());
+      if (!state.eventsByKind.has(event.kind)) {
+        state.eventsByKind.set(event.kind, new Map());
       }
-      newEventsByKind.get(event.kind)!.set(event.id, event);
+      state.eventsByKind.get(event.kind)!.set(event.id, event);
 
-      if (!newEventsByAuthor.has(event.pubkey)) {
-        newEventsByAuthor.set(event.pubkey, new Map());
+      if (!state.eventsByAuthor.has(event.pubkey)) {
+        state.eventsByAuthor.set(event.pubkey, new Map());
       }
-      newEventsByAuthor.get(event.pubkey)!.set(event.id, event);
+      state.eventsByAuthor.get(event.pubkey)!.set(event.id, event);
 
       if (event.kind === NOSTR_KIND.METADATA) {
-        const existing = newProfiles.get(event.pubkey);
+        const existing = state.profiles.get(event.pubkey);
         if (!existing || existing.fetchedAt < event.created_at * 1000) {
-          newProfiles.set(
+          state.profiles.set(
             event.pubkey,
             parseProfileContent(event.pubkey, event.content),
           );
+          profilesChanged = true;
         }
       }
     }
 
     if (changed) {
-      set({
-        eventsById: newEventsById,
-        eventsByKind: newEventsByKind,
-        eventsByAuthor: newEventsByAuthor,
-        profiles: newProfiles,
-        totalEvents: newEventsById.size,
-      });
+      const patch: Partial<EventStore> = { totalEvents: state.eventsById.size };
+      // Only signal profile change when metadata was actually updated.
+      // Creates a new Map reference so subscribers re-render.
+      if (profilesChanged) {
+        patch.profiles = new Map(state.profiles);
+      }
+      set(patch);
     }
   },
 

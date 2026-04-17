@@ -35,7 +35,6 @@ export function ClusterOverviewPanel() {
   const selectCluster = useUIStore((s) => s.selectCluster);
   const flyToClusterFn = useUIStore((s) => s.flyToClusterFn);
   const myPubkey = useUIStore((s) => s.myPubkey);
-  const eventsById = useEventStore((s) => s.eventsById);
   const profiles = useEventStore((s) => s.profiles);
 
   const [pubkeyInput, setPubkeyInput] = useState("");
@@ -43,7 +42,13 @@ export function ClusterOverviewPanel() {
   const bridges = useGraphStore((s) => s.bridges);
   const explorationMap = useGraphStore((s) => s.explorationMap);
 
-  const allEvents = useMemo(() => [...eventsById.values()], [eventsById]);
+  // Recompute allEvents only when clusters change (graph recompute, ~10s).
+  // No need to update on every individual event arrival.
+  const allEvents = useMemo(
+    () => useEventStore.getState().getAllEvents(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rawClusters signals graph recompute
+    [rawClusters],
+  );
 
   const connectivity = useMemo(
     () => clusterConnectivity(bridges),
