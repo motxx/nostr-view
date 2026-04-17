@@ -25,6 +25,9 @@ interface UIStore {
   /** True when in live mode (following real-time) */
   isLive: boolean;
 
+  /** Mobile sidebar drawer open state */
+  isSidebarOpen: boolean;
+
   selectCluster: (clusterId: string | null) => void;
   selectNode: (nodeId: string | null) => void;
   setTimelinePanelOpen: (open: boolean) => void;
@@ -39,6 +42,8 @@ interface UIStore {
   resetCamera: () => void;
   setTimeRange: (range: [number, number] | null) => void;
   goLive: () => void;
+  toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -54,6 +59,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   isCameraMoved: false,
   timeRange: null,
   isLive: true,
+  isSidebarOpen: false,
 
   selectCluster: (clusterId) =>
     set({
@@ -109,4 +115,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ timeRange: range, isLive: range === null }),
 
   goLive: () => set({ timeRange: null, isLive: true }),
+
+  toggleSidebar: () => set((s) => ({ isSidebarOpen: !s.isSidebarOpen })),
+  setSidebarOpen: (open) => set({ isSidebarOpen: open }),
 }));

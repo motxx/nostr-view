@@ -11,7 +11,7 @@ export function ResetViewButton() {
   return (
     <button
       onClick={resetCamera}
-      className="fixed bottom-8 left-6 z-[100] flex items-center gap-2 bg-black/90 backdrop-blur-sm border border-[#00ff41]/20 rounded px-4 py-2.5 font-mono text-[11px] text-[#00ff41]/60 hover:text-[#00ff41] hover:border-[#00ff41]/40 transition-all duration-200 hover:bg-[#00ff41]/5 uppercase tracking-wider"
+      className="fixed bottom-20 left-3 md:bottom-8 md:left-6 z-[100] flex items-center gap-2 bg-black/90 backdrop-blur-sm border border-[#00ff41]/20 rounded px-3 md:px-4 py-2 md:py-2.5 font-mono text-[10px] md:text-[11px] text-[#00ff41]/60 hover:text-[#00ff41] hover:border-[#00ff41]/40 transition-all duration-200 hover:bg-[#00ff41]/5 uppercase tracking-wider"
     >
       <svg
         width="14"

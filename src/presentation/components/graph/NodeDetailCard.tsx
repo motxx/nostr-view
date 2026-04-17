@@ -58,7 +58,7 @@ export function NodeDetailCard() {
   const timeAgo = lastActive ? formatTimeAgo(lastActive) : "unknown";
 
   return (
-    <div className="fixed top-20 left-6 z-[100] w-80 pointer-events-auto">
+    <div className="fixed inset-x-0 bottom-8 mx-3 md:inset-auto md:top-20 md:left-6 md:mx-0 z-[100] w-auto md:w-80 pointer-events-auto">
       <div className="osint-panel bg-black/90 backdrop-blur-md border border-[#00ff41]/20 rounded p-0 shadow-2xl shadow-[#00ff41]/5">
         {/* Classification header */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#00ff41]/15 bg-[#00ff41]/5">

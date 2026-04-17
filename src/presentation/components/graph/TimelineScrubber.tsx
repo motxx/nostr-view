@@ -74,10 +74,10 @@ export function TimelineScrubber() {
   );
 
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
-      <div className="flex items-end gap-2 bg-black/80 backdrop-blur-sm border border-[#00ff41]/15 rounded-lg px-3 py-2">
-        {/* Histogram bars */}
-        <div className="flex items-end gap-px h-6">
+    <div className="fixed bottom-8 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 z-40 pointer-events-auto">
+      <div className="flex items-end gap-2 bg-black/80 backdrop-blur-sm border border-[#00ff41]/15 rounded-lg px-3 py-2 justify-center">
+        {/* Histogram bars (hidden on mobile) */}
+        <div className="hidden md:flex items-end gap-px h-6">
           {buckets.map((bucket, i) => (
             <HistogramBar
               key={i}
