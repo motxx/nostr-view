@@ -11,8 +11,9 @@ import {
   type BridgeInfo,
 } from "@/domain/services/cluster-summary";
 import {
+  CLUSTER_MODES,
   CLUSTER_STRATEGY_LABELS,
-  type ClusterStrategy,
+  type ClusterMode,
 } from "@/domain/services/cluster-strategy";
 import { primalNoteUrl, primalProfileUrl } from "@/lib/nostr-url";
 import { nip19 } from "nostr-tools";
@@ -20,7 +21,14 @@ import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
 import { clusterFingerprint } from "@/domain/entities/cluster";
 import { NoteContent } from "@/presentation/components/common/NoteContent";
 
-const STRATEGIES: ClusterStrategy[] = ["topic", "interaction", "language"];
+/** Compact tab labels — five tabs share one sidebar row */
+const MODE_TAB_LABELS: Record<ClusterMode, string> = {
+  auto: "Auto",
+  interaction: "Comm",
+  topic: "Topic",
+  language: "Lang",
+  engagement: "Engage",
+};
 
 export function ClusterOverviewPanel() {
   const rawClusters = useGraphStore((s) => s.clusters);
@@ -43,6 +51,11 @@ export function ClusterOverviewPanel() {
 
   const bridges = useGraphStore((s) => s.bridges);
   const explorationMap = useGraphStore((s) => s.explorationMap);
+  const resolvedStrategy = useGraphStore((s) => s.resolvedStrategy);
+  const clusterQualities = useGraphStore((s) => s.clusterQualities);
+  const resolvedQuality = resolvedStrategy
+    ? clusterQualities[resolvedStrategy]
+    : undefined;
 
   // Recompute allEvents only when clusters change (graph recompute, ~10s).
   // No need to update on every individual event arrival.
@@ -109,9 +122,9 @@ export function ClusterOverviewPanel() {
 
   return (
     <SidebarPanel title="cluster monitoring">
-      {/* Strategy tabs */}
+      {/* Mode tabs (auto + facets) */}
       <div className="flex items-center gap-1 p-2 border-b border-[#00ff41]/10">
-        {STRATEGIES.map((s) => (
+        {CLUSTER_MODES.map((s) => (
           <button
             key={s}
             onClick={() => {
@@ -119,16 +132,35 @@ export function ClusterOverviewPanel() {
               useGraphStore.getState().clearClusterLabelOverrides();
               useUIStore.getState().reheatSimulation();
             }}
-            className={`flex-1 font-mono text-[10px] px-2 py-1.5 rounded transition-colors uppercase tracking-wider ${
+            className={`flex-1 font-mono text-[10px] px-1 py-1.5 rounded transition-colors uppercase tracking-wider ${
               clusterStrategy === s
                 ? "bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30"
                 : "text-white/30 hover:text-[#00ff41]/60 hover:bg-[#00ff41]/5 border border-transparent"
             }`}
           >
-            {CLUSTER_STRATEGY_LABELS[s]}
+            {MODE_TAB_LABELS[s]}
           </button>
         ))}
       </div>
+
+      {/* Partition quality readout */}
+      {resolvedStrategy && resolvedQuality && (
+        <div className="px-3 py-1.5 border-b border-[#00ff41]/10 flex items-center justify-between gap-2">
+          <span className="font-mono text-[9px] text-[#0ff]/30 uppercase tracking-[0.2em] truncate">
+            {clusterStrategy === "auto"
+              ? `auto → ${CLUSTER_STRATEGY_LABELS[resolvedStrategy]}`
+              : "partition quality"}
+          </span>
+          <span
+            className="font-mono text-[9px] text-[#00ff41]/50 tabular-nums shrink-0"
+            title="Q: modularity vs interaction graph (Newman 2004) · cov: assigned active users · bal: cluster size entropy"
+          >
+            Q {resolvedQuality.modularity.toFixed(2)} · cov{" "}
+            {Math.round(resolvedQuality.coverage * 100)}% · bal{" "}
+            {resolvedQuality.balance.toFixed(2)}
+          </span>
+        </div>
+      )}
 
       {/* Operator identification */}
       <div className="px-3 py-2 border-b border-[#00ff41]/10">

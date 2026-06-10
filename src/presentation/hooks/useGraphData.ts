@@ -5,7 +5,12 @@ import { useEventStore } from "@/store/event-store";
 import { useGraphStore } from "@/store/graph-store";
 import { useUIStore } from "@/store/ui-store";
 import { buildGraph } from "@/domain/services/graph-builder";
-import { detectClustersByStrategy } from "@/domain/services/cluster-strategy";
+import {
+  detectClustersByStrategy,
+  selectBestClusters,
+  type ClusterStrategy,
+} from "@/domain/services/cluster-strategy";
+import { evaluateClusterQuality } from "@/domain/services/cluster-quality";
 import { computeBridges, findUserCluster } from "@/domain/services/cluster-summary";
 import { computeExplorationMap } from "@/domain/services/exploration-map";
 import { filterEventsByTimeRange } from "@/lib/event-histogram";
@@ -32,7 +37,23 @@ export function useGraphData() {
         ? filterEventsByTimeRange(allEvents, currentTimeRange[0], currentTimeRange[1])
         : allEvents;
 
-      const clusters = detectClustersByStrategy(events, strategy);
+      // "auto" scores every facet on the same quality yardstick and
+      // applies the best one for the data currently loaded
+      let clusters: import("@/domain/entities/cluster").Cluster[];
+      let resolvedStrategy: ClusterStrategy;
+      let clusterQualities: ReturnType<typeof selectBestClusters>["qualities"];
+      if (strategy === "auto") {
+        const selection = selectBestClusters(events);
+        clusters = selection.clusters;
+        resolvedStrategy = selection.strategy;
+        clusterQualities = selection.qualities;
+      } else {
+        clusters = detectClustersByStrategy(events, strategy);
+        resolvedStrategy = strategy;
+        clusterQualities = {
+          [strategy]: evaluateClusterQuality(clusters, events),
+        };
+      }
       const { nodes, edges } = buildGraph(events, profiles, clusters);
 
       // Compute bridges and exploration map (Feature 2)
@@ -59,6 +80,8 @@ export function useGraphData() {
         edges,
         bridges,
         explorationMap,
+        resolvedStrategy,
+        clusterQualities,
       });
 
       return events.length;

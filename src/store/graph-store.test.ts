@@ -156,6 +156,8 @@ describe("graph-store", () => {
         edges: [],
         bridges: new Map(),
         explorationMap: null,
+        resolvedStrategy: null,
+        clusterQualities: {},
       });
       // Overrides survive setAll — this is the key invariant
       expect(useGraphStore.getState().clusterLabelOverrides.get(fp1)).toBe("BTC Maxis");
@@ -179,6 +181,8 @@ describe("graph-store", () => {
         edges: [],
         bridges: new Map(),
         explorationMap: null,
+        resolvedStrategy: null,
+        clusterQualities: {},
       });
 
       // Fingerprint is the same → override still resolves

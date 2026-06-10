@@ -4,6 +4,8 @@ import type { GraphEdge } from "@/domain/entities/graph-edge";
 import type { Cluster } from "@/domain/entities/cluster";
 import type { BridgeInfo } from "@/domain/services/cluster-summary";
 import type { ExplorationMap } from "@/domain/services/exploration-map";
+import type { ClusterStrategy } from "@/domain/services/cluster-strategy";
+import type { ClusterQuality } from "@/domain/services/cluster-quality";
 
 interface GraphStore {
   nodes: GraphNode[];
@@ -11,6 +13,10 @@ interface GraphStore {
   clusters: Cluster[];
   bridges: Map<string, BridgeInfo[]>;
   explorationMap: ExplorationMap | null;
+  /** Facet that produced the current clusters (auto mode resolves here) */
+  resolvedStrategy: ClusterStrategy | null;
+  /** Quality of each evaluated facet (all four in auto mode) */
+  clusterQualities: Partial<Record<ClusterStrategy, ClusterQuality>>;
   lastUpdated: number;
   /** LLM-generated label overrides, keyed by content-based fingerprint
    *  (clusterFingerprint()). Separate from clusters so that periodic
@@ -27,6 +33,8 @@ interface GraphStore {
     edges: GraphEdge[];
     bridges: Map<string, BridgeInfo[]>;
     explorationMap: ExplorationMap | null;
+    resolvedStrategy: ClusterStrategy | null;
+    clusterQualities: Partial<Record<ClusterStrategy, ClusterQuality>>;
   }) => void;
   setClusterLabelOverrides: (labelMap: Map<string, string>) => void;
   clearClusterLabelOverrides: () => void;
@@ -39,6 +47,8 @@ export const useGraphStore = create<GraphStore>((set) => ({
   clusters: [],
   bridges: new Map(),
   explorationMap: null,
+  resolvedStrategy: null,
+  clusterQualities: {},
   lastUpdated: 0,
   clusterLabelOverrides: new Map(),
 
@@ -67,6 +77,8 @@ export const useGraphStore = create<GraphStore>((set) => ({
       clusters: [],
       bridges: new Map(),
       explorationMap: null,
+      resolvedStrategy: null,
+      clusterQualities: {},
       clusterLabelOverrides: new Map(),
       lastUpdated: 0,
     }),

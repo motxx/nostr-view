@@ -4,6 +4,9 @@ export interface Cluster {
   hashtags: string[];
   memberPubkeys: Set<string>;
   color: string;
+  /** True when the label is deterministic and final (language, engagement
+   *  segments) — skips LLM naming and fingerprints by id. */
+  labelLocked?: boolean;
   centerX?: number;
   centerY?: number;
   centerZ?: number;
@@ -32,9 +35,10 @@ export function getClusterColor(index: number): string {
  * remain the same, regardless of positional ID shifts.
  */
 export function clusterFingerprint(cluster: Cluster): string {
-  if (cluster.hashtags.length > 0) {
+  // Locked-label clusters (language, engagement segments) have stable,
+  // deterministic ids — hashtags are only decorative context there.
+  if (!cluster.labelLocked && cluster.hashtags.length > 0) {
     return [...cluster.hashtags].sort().slice(0, 5).join("+");
   }
-  // Language clusters with no hashtags — ID is already stable (lang-Japanese etc.)
   return cluster.id;
 }

@@ -1,29 +1,68 @@
 import type { NostrEvent } from "@/domain/entities/nostr-event";
-import { getReferencedPubkeys, getHashtags } from "@/domain/entities/nostr-event";
+import { getReferencedPubkeys } from "@/domain/entities/nostr-event";
 import { type Cluster, getClusterColor } from "@/domain/entities/cluster";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
+import { louvain, addUndirectedEdge, type WeightedGraph } from "./louvain";
+import { rankClusterHashtags } from "./cluster-labeling";
 
 /**
- * Cluster by interaction frequency using label propagation.
- * People who reply/react/repost each other end up in the same cluster.
+ * Edge weights for the social interaction graph.
+ *
+ * Replies signal the strongest mutual engagement, reposts endorsement,
+ * reactions lightweight approval.
+ *
+ * Follows are EXCLUDED (weight 0), validated on real relay data
+ * (scripts/eval-clustering.ts): kind-3 contact lists are years of
+ * accumulated follows, not engagement within the loaded window, and they
+ * form a dense global web across communities. Any follow weight — even
+ * 0.25 — collapsed 7 interpretable communities (Q=0.78) into one
+ * 157-member blob (Q=0.17). Twitter's SimClusters does use follows, but
+ * only after a producer-producer cosine-similarity transform at a scale
+ * where that signal dominates; raw follow edges at this scale are noise.
  */
-export function detectInteractionClusters(
-  events: NostrEvent[],
-  minClusterSize: number = 3,
-  maxClusters: number = 10,
-): Cluster[] {
-  // 1. Build weighted interaction graph
-  const interactions = new Map<string, Map<string, number>>();
-  const allPubkeys = new Set<string>();
+export interface InteractionWeights {
+  reply: number;
+  repost: number;
+  reaction: number;
+  follow: number;
+}
 
-  function addEdge(a: string, b: string, weight: number) {
-    allPubkeys.add(a);
-    allPubkeys.add(b);
-    if (!interactions.has(a)) interactions.set(a, new Map());
-    if (!interactions.has(b)) interactions.set(b, new Map());
-    interactions.get(a)!.set(b, (interactions.get(a)!.get(b) ?? 0) + weight);
-    interactions.get(b)!.set(a, (interactions.get(b)!.get(a) ?? 0) + weight);
+export const INTERACTION_WEIGHTS: InteractionWeights = {
+  reply: 2.0,
+  repost: 1.5,
+  reaction: 1.0,
+  follow: 0,
+};
+
+/**
+ * Build the undirected weighted user-user graph from Nostr events,
+ * restricted to ACTIVE users (authors of text notes in the dataset).
+ *
+ * The restriction matters: contact lists carry hundreds of p-tags to
+ * users with no activity in the loaded window. Including them floods the
+ * graph with peripheral nodes and collapses community structure —
+ * measured on real relay data, modularity fell from 0.71 (active-only)
+ * to 0.20 (unrestricted). The visualization also only renders note
+ * authors, so clustering anyone else is wasted. SimClusters applies the
+ * same idea by clustering producers only.
+ *
+ * Shared with cluster quality evaluation (modularity is measured against
+ * this graph regardless of which facet produced the partition).
+ */
+export function buildInteractionGraph(
+  events: NostrEvent[],
+  weights: InteractionWeights = INTERACTION_WEIGHTS,
+): WeightedGraph {
+  const active = new Set<string>();
+  for (const event of events) {
+    if (event.kind === NOSTR_KIND.TEXT_NOTE) active.add(event.pubkey);
   }
+
+  const graph: WeightedGraph = new Map();
+  const addActiveEdge = (a: string, b: string, weight: number) => {
+    if (weight <= 0) return;
+    if (active.has(a) && active.has(b)) addUndirectedEdge(graph, a, b, weight);
+  };
 
   for (const event of events) {
     const refs = getReferencedPubkeys(event);
@@ -31,104 +70,83 @@ export function detectInteractionClusters(
 
     switch (event.kind) {
       case NOSTR_KIND.TEXT_NOTE:
-        for (const ref of refs) addEdge(event.pubkey, ref, 2); // reply
+        for (const ref of refs)
+          addActiveEdge(event.pubkey, ref, weights.reply);
         break;
       case NOSTR_KIND.REACTION:
-        for (const ref of refs) addEdge(event.pubkey, ref, 1);
+        for (const ref of refs)
+          addActiveEdge(event.pubkey, ref, weights.reaction);
         break;
       case NOSTR_KIND.REPOST:
-        for (const ref of refs) addEdge(event.pubkey, ref, 1.5);
+        for (const ref of refs)
+          addActiveEdge(event.pubkey, ref, weights.repost);
         break;
       case NOSTR_KIND.CONTACT_LIST:
-        for (const ref of refs) addEdge(event.pubkey, ref, 0.5);
+        for (const ref of refs)
+          addActiveEdge(event.pubkey, ref, weights.follow);
         break;
     }
   }
+  return graph;
+}
 
-  if (allPubkeys.size === 0) return [];
+/**
+ * Community detection on the social interaction graph.
+ *
+ * Uses Louvain modularity optimization (Blondel et al. 2008) with a
+ * connectivity post-pass — the standard for social-graph community
+ * detection. Replaces label propagation, whose documented failure modes
+ * (run-to-run instability, giant-community collapse; see Traag & Šubelj
+ * 2023) made cluster identity churn between recomputes.
+ */
+export function detectInteractionClusters(
+  events: NostrEvent[],
+  minClusterSize: number = 3,
+  maxClusters: number = 10,
+): Cluster[] {
+  const graph = buildInteractionGraph(events);
+  if (graph.size === 0) return [];
 
-  // 2. Label propagation
-  const labels = new Map<string, string>();
-  for (const pk of allPubkeys) labels.set(pk, pk);
+  const { communities } = louvain(graph);
 
-  for (let iter = 0; iter < 15; iter++) {
-    let changed = false;
-    for (const pk of allPubkeys) {
-      const neighbors = interactions.get(pk);
-      if (!neighbors || neighbors.size === 0) continue;
-
-      const labelWeights = new Map<string, number>();
-      for (const [neighbor, weight] of neighbors) {
-        const nl = labels.get(neighbor) ?? neighbor;
-        labelWeights.set(nl, (labelWeights.get(nl) ?? 0) + weight);
-      }
-
-      let bestLabel = labels.get(pk)!;
-      let bestWeight = 0;
-      for (const [label, weight] of labelWeights) {
-        if (weight > bestWeight) {
-          bestWeight = weight;
-          bestLabel = label;
-        }
-      }
-      if (bestLabel !== labels.get(pk)) {
-        labels.set(pk, bestLabel);
-        changed = true;
-      }
+  const groups = new Map<number, Set<string>>();
+  for (const [pubkey, community] of communities) {
+    let members = groups.get(community);
+    if (!members) {
+      members = new Set();
+      groups.set(community, members);
     }
-    if (!changed) break;
+    members.add(pubkey);
   }
 
-  // 3. Group by label
-  const groups = new Map<string, Set<string>>();
-  for (const [pk, label] of labels) {
-    if (!groups.has(label)) groups.set(label, new Set());
-    groups.get(label)!.add(pk);
-  }
+  const kept = [...groups.values()]
+    .filter((members) => members.size >= minClusterSize)
+    .sort(
+      (a, b) =>
+        b.size - a.size ||
+        [...a].sort()[0].localeCompare([...b].sort()[0]),
+    )
+    .slice(0, maxClusters);
 
-  // 4. Collect hashtags per member for labelling
-  const textNotes = events.filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE);
-  const memberHashtags = new Map<string, Map<string, number>>();
-  for (const event of textNotes) {
-    const tags = getHashtags(event);
-    for (const tag of tags) {
-      if (!memberHashtags.has(event.pubkey)) memberHashtags.set(event.pubkey, new Map());
-      const m = memberHashtags.get(event.pubkey)!;
-      m.set(tag, (m.get(tag) ?? 0) + 1);
-    }
-  }
+  // c-TF-IDF picks tags distinctive to each community, not globally common ones
+  const clusterMembers = new Map<string, Set<string>>();
+  kept.forEach((members, index) =>
+    clusterMembers.set(`interaction-${index}`, members),
+  );
+  const rankedTags = rankClusterHashtags(clusterMembers, events);
 
-  // 5. Convert to Cluster[], sorted by size
-  const clusters = [...groups.entries()]
-    .filter(([, members]) => members.size >= minClusterSize)
-    .sort((a, b) => b[1].size - a[1].size)
-    .slice(0, maxClusters)
-    .map(([, members], index) => {
-      // Aggregate hashtag counts across cluster members
-      const tagCounts = new Map<string, number>();
-      for (const pk of members) {
-        const tags = memberHashtags.get(pk);
-        if (!tags) continue;
-        for (const [tag, count] of tags) {
-          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + count);
-        }
-      }
-      const topTags = [...tagCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([tag]) => tag);
-      const hashtags = topTags.slice(0, 10);
-      const label = topTags.length > 0
-        ? topTags.slice(0, 3).join(", ")
-        : `Community ${index + 1}`;
-
-      return {
-        id: `interaction-${index}`,
-        label,
-        hashtags,
-        memberPubkeys: members,
-        color: getClusterColor(index),
-      };
-    });
-
-  return clusters;
+  return kept.map((members, index) => {
+    const id = `interaction-${index}`;
+    const topTags = rankedTags.get(id) ?? [];
+    return {
+      id,
+      label:
+        topTags.length > 0
+          ? topTags.slice(0, 3).join(", ")
+          : `Community ${index + 1}`,
+      hashtags: topTags.slice(0, 10),
+      memberPubkeys: members,
+      color: getClusterColor(index),
+    };
+  });
 }

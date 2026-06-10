@@ -74,4 +74,57 @@ describe("detectClusters", () => {
       expect(c.hashtags).toContain("lightning");
     }
   });
+
+  it("separates two topic groups with disjoint tag usage", () => {
+    const events = [
+      makeNote("alice", ["bitcoin", "lightning"]),
+      makeNote("bob", ["bitcoin", "lightning"]),
+      makeNote("carol", ["bitcoin", "lightning"]),
+      makeNote("dora", ["art", "painting"]),
+      makeNote("emma", ["art", "painting"]),
+      makeNote("fred", ["art", "painting"]),
+    ];
+    const clusters = detectClusters(events, 3);
+    expect(clusters.length).toBe(2);
+    const btc = clusters.find((c) => c.hashtags.includes("bitcoin"))!;
+    const art = clusters.find((c) => c.hashtags.includes("art"))!;
+    expect([...btc.memberPubkeys].sort()).toEqual(["alice", "bob", "carol"]);
+    expect([...art.memberPubkeys].sort()).toEqual(["dora", "emma", "fred"]);
+  });
+
+  it("assigns a user to the topic they use most", () => {
+    const events = [
+      makeNote("alice", ["bitcoin"]),
+      makeNote("bob", ["bitcoin"]),
+      makeNote("carol", ["bitcoin"]),
+      makeNote("dora", ["art"]),
+      makeNote("emma", ["art"]),
+      makeNote("fred", ["art"]),
+      // mixed user: posts art once but bitcoin three times
+      makeNote("mixed", ["bitcoin"]),
+      makeNote("mixed", ["bitcoin"]),
+      makeNote("mixed", ["bitcoin"]),
+      makeNote("mixed", ["art"]),
+    ];
+    const clusters = detectClusters(events, 3);
+    const btc = clusters.find((c) => c.hashtags.includes("bitcoin"))!;
+    expect(btc.memberPubkeys.has("mixed")).toBe(true);
+  });
+
+  it("is deterministic across runs", () => {
+    const events = [
+      makeNote("alice", ["bitcoin", "nostr"]),
+      makeNote("bob", ["bitcoin", "nostr"]),
+      makeNote("carol", ["bitcoin"]),
+      makeNote("dora", ["art", "nostr"]),
+      makeNote("emma", ["art", "nostr"]),
+      makeNote("fred", ["art"]),
+    ];
+    const a = detectClusters(events, 2);
+    const b = detectClusters(events, 2);
+    expect(a.map((c) => c.id)).toEqual(b.map((c) => c.id));
+    expect(a.map((c) => [...c.memberPubkeys].sort())).toEqual(
+      b.map((c) => [...c.memberPubkeys].sort()),
+    );
+  });
 });

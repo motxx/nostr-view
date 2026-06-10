@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { ClusterStrategy } from "@/domain/services/cluster-strategy";
+import type { ClusterMode } from "@/domain/services/cluster-strategy";
 
 interface UIStore {
-  clusterStrategy: ClusterStrategy;
+  /** Selected facet, or "auto" = highest-quality facet for current data */
+  clusterStrategy: ClusterMode;
   /** User's own pubkey for "you are here" */
   myPubkey: string | null;
   selectedClusterId: string | null;
@@ -37,7 +38,7 @@ interface UIStore {
   setReheatSimulationFn: (fn: (() => void) | null) => void;
   reheatSimulation: () => void;
   setMyPubkey: (pubkey: string | null) => void;
-  setClusterStrategy: (strategy: ClusterStrategy) => void;
+  setClusterStrategy: (strategy: ClusterMode) => void;
   setCameraMoved: (moved: boolean) => void;
   resetCamera: () => void;
   setTimeRange: (range: [number, number] | null) => void;
@@ -47,7 +48,7 @@ interface UIStore {
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
-  clusterStrategy: "topic" as ClusterStrategy,
+  clusterStrategy: "auto" as ClusterMode,
   myPubkey: null,
   selectedClusterId: null,
   selectedNodeId: null,

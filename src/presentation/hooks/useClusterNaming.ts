@@ -23,9 +23,11 @@ export function useClusterNaming() {
   const overrides = useGraphStore((s) => s.clusterLabelOverrides);
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
 
-  // Derived during render: clusters not yet named by LLM (keyed by fingerprint)
+  // Derived during render: clusters not yet named by LLM (keyed by
+  // fingerprint). Locked labels (language, engagement segments) are
+  // deterministic and final — never sent to the LLM.
   const unnamedIds = clusters
-    .filter((c) => !overrides.has(clusterFingerprint(c)))
+    .filter((c) => !c.labelLocked && !overrides.has(clusterFingerprint(c)))
     .map((c) => c.id)
     .sort()
     .join(",");
@@ -38,7 +40,7 @@ export function useClusterNaming() {
       const currentClusters = useGraphStore.getState().clusters;
       const currentOverrides = useGraphStore.getState().clusterLabelOverrides;
       const toName = currentClusters.filter(
-        (c) => !currentOverrides.has(clusterFingerprint(c)),
+        (c) => !c.labelLocked && !currentOverrides.has(clusterFingerprint(c)),
       );
       if (toName.length === 0) return 0;
 

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   detectClustersByStrategy,
+  selectBestClusters,
   CLUSTER_STRATEGY_LABELS,
+  CLUSTER_MODE_LABELS,
+  CLUSTER_STRATEGIES,
+  CLUSTER_MODES,
   type ClusterStrategy,
 } from "./cluster-strategy";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
@@ -67,14 +71,74 @@ describe("detectClustersByStrategy", () => {
     expect(jp).toBeDefined();
     expect(jp!.memberPubkeys.size).toBe(3);
   });
+
+  it("dispatches to engagement strategy", () => {
+    const clusters = detectClustersByStrategy(events, "engagement", 1);
+    expect(clusters.length).toBeGreaterThanOrEqual(1);
+    for (const c of clusters) {
+      expect(c.id.startsWith("engagement-")).toBe(true);
+      expect(c.labelLocked).toBe(true);
+    }
+  });
+});
+
+describe("selectBestClusters", () => {
+  it("evaluates every facet and returns the best by quality score", () => {
+    // Two dense interaction groups → interaction facet should partition
+    // the graph far better than topic/language (no tags, same language)
+    const events: NostrEvent[] = [];
+    const groupA = ["a1", "a2", "a3", "a4"];
+    const groupB = ["b1", "b2", "b3", "b4"];
+    for (const g of [groupA, groupB]) {
+      for (const x of g) {
+        for (const y of g) {
+          if (x < y) events.push(makeNote(x, "hello", [], [y]));
+        }
+      }
+    }
+
+    const selection = selectBestClusters(events, 3);
+    expect(selection.strategy).toBe("interaction");
+    expect(selection.clusters.length).toBe(2);
+    // all facets evaluated
+    for (const s of CLUSTER_STRATEGIES) {
+      expect(selection.qualities[s]).toBeDefined();
+    }
+    const winner = selection.qualities[selection.strategy]!;
+    for (const s of CLUSTER_STRATEGIES) {
+      expect(winner.score).toBeGreaterThanOrEqual(
+        selection.qualities[s]!.score,
+      );
+    }
+  });
+
+  it("is deterministic", () => {
+    const events = [
+      makeNote("alice", "hello", ["bitcoin"], ["bob"]),
+      makeNote("bob", "world", ["bitcoin"], ["alice"]),
+      makeNote("carol", "テスト", ["bitcoin"]),
+    ];
+    const a = selectBestClusters(events, 2);
+    const b = selectBestClusters(events, 2);
+    expect(a.strategy).toBe(b.strategy);
+    expect(a.clusters.map((c) => c.id)).toEqual(b.clusters.map((c) => c.id));
+  });
 });
 
 describe("CLUSTER_STRATEGY_LABELS", () => {
-  it("has labels for all strategies", () => {
-    const strategies: ClusterStrategy[] = ["topic", "interaction", "language"];
+  it("has labels for all strategies and modes", () => {
+    const strategies: ClusterStrategy[] = [
+      "topic",
+      "interaction",
+      "language",
+      "engagement",
+    ];
     for (const s of strategies) {
       expect(CLUSTER_STRATEGY_LABELS[s]).toBeDefined();
       expect(typeof CLUSTER_STRATEGY_LABELS[s]).toBe("string");
+    }
+    for (const m of CLUSTER_MODES) {
+      expect(CLUSTER_MODE_LABELS[m]).toBeDefined();
     }
   });
 });

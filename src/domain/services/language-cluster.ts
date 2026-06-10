@@ -43,17 +43,14 @@ export function detectLanguageClusters(
     counts.set(lang, (counts.get(lang) ?? 0) + 1);
   }
 
-  // Assign each user to their dominant language
+  // Assign each user to their dominant language. Ties break
+  // alphabetically so the result is independent of event order.
   const langGroups = new Map<string, Set<string>>();
   for (const [pk, counts] of userLangCounts) {
-    let bestLang = "English";
-    let bestCount = 0;
-    for (const [lang, count] of counts) {
-      if (count > bestCount) {
-        bestCount = count;
-        bestLang = lang;
-      }
-    }
+    const best = [...counts.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    )[0];
+    const bestLang = best ? best[0] : "English";
     if (!langGroups.has(bestLang)) langGroups.set(bestLang, new Set());
     langGroups.get(bestLang)!.add(pk);
   }
@@ -72,7 +69,7 @@ export function detectLanguageClusters(
   // Convert to Cluster[]
   const clusters = [...langGroups.entries()]
     .filter(([, members]) => members.size >= minClusterSize)
-    .sort((a, b) => b[1].size - a[1].size)
+    .sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]))
     .slice(0, maxClusters)
     .map(([lang, members], index) => {
       // Aggregate hashtag counts across cluster members
@@ -94,6 +91,7 @@ export function detectLanguageClusters(
         hashtags: topTags.slice(0, 10),
         memberPubkeys: members,
         color: getClusterColor(index),
+        labelLocked: true,
       };
     });
 
