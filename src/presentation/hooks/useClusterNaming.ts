@@ -87,10 +87,15 @@ export function useClusterNaming() {
       }
 
       // Cache by fingerprint so labels survive cluster ID shifts on recompute
-      const labelMap = new Map<string, string>();
+      const labelMap = new Map<
+        string,
+        import("@/domain/entities/cluster").ClusterLabelOverride
+      >();
       for (const r of results) {
         const fp = idToFingerprint.get(r.id);
-        if (r.id && r.label && fp) labelMap.set(fp, r.label);
+        if (r.id && r.label && fp) {
+          labelMap.set(fp, { label: r.label, tagline: r.tagline });
+        }
       }
 
       if (labelMap.size === 0) {

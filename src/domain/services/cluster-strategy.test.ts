@@ -123,6 +123,24 @@ describe("selectBestClusters", () => {
     expect(a.strategy).toBe(b.strategy);
     expect(a.clusters.map((c) => c.id)).toEqual(b.clusters.map((c) => c.id));
   });
+
+  it("keeps the incumbent facet within the hysteresis margin", () => {
+    const events = [
+      makeNote("alice", "hello", ["bitcoin"], ["bob"]),
+      makeNote("bob", "world", ["bitcoin"], ["alice"]),
+      makeNote("carol", "テスト", ["bitcoin"]),
+    ];
+    const open = selectBestClusters(events, 2);
+    // Pick any non-winning facet whose score is within a huge margin —
+    // with hysteresis it must stay selected as the incumbent
+    const challenger = open.strategy;
+    const incumbent = CLUSTER_STRATEGIES.find((s) => s !== challenger)!;
+    const held = selectBestClusters(events, 2, 10, incumbent, 10);
+    expect(held.strategy).toBe(incumbent);
+    // ...but a zero margin lets the true winner through
+    const released = selectBestClusters(events, 2, 10, incumbent, 0);
+    expect(released.strategy).toBe(challenger);
+  });
 });
 
 describe("CLUSTER_STRATEGY_LABELS", () => {

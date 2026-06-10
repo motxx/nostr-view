@@ -6,10 +6,11 @@ import { useUIStore } from "@/store/ui-store";
 import { useEventStore } from "@/store/event-store";
 import {
   findRepresentativeNotes,
-  findUserCluster,
-  clusterConnectivity,
   type BridgeInfo,
 } from "@/domain/services/cluster-summary";
+import { useSortedClusters } from "@/presentation/hooks/useSortedClusters";
+import { useActivityStore } from "@/store/activity-store";
+import { useNowSec } from "@/lib/use-now-sec";
 import {
   CLUSTER_MODES,
   CLUSTER_STRATEGY_LABELS,
@@ -18,7 +19,6 @@ import {
 import { primalNoteUrl, primalProfileUrl } from "@/lib/nostr-url";
 import { nip19 } from "nostr-tools";
 import { SidebarPanel } from "@/presentation/components/layout/SidebarPanel";
-import { clusterFingerprint } from "@/domain/entities/cluster";
 import { NoteContent } from "@/presentation/components/common/NoteContent";
 
 /** Compact tab labels — five tabs share one sidebar row */
@@ -32,14 +32,7 @@ const MODE_TAB_LABELS: Record<ClusterMode, string> = {
 
 export function ClusterOverviewPanel() {
   const rawClusters = useGraphStore((s) => s.clusters);
-  const labelOverrides = useGraphStore((s) => s.clusterLabelOverrides);
-  const clusters = useMemo(() => {
-    if (labelOverrides.size === 0) return rawClusters;
-    return rawClusters.map((c) => {
-      const override = labelOverrides.get(clusterFingerprint(c));
-      return override ? { ...c, label: override } : c;
-    });
-  }, [rawClusters, labelOverrides]);
+  const { clusters: sortedClusters, myCluster } = useSortedClusters();
   const clusterStrategy = useUIStore((s) => s.clusterStrategy);
   const setClusterStrategy = useUIStore((s) => s.setClusterStrategy);
   const selectCluster = useUIStore((s) => s.selectCluster);
@@ -65,36 +58,35 @@ export function ClusterOverviewPanel() {
     [rawClusters],
   );
 
-  const connectivity = useMemo(
-    () => clusterConnectivity(bridges),
-    [bridges],
-  );
-
-  const myCluster = useMemo(
-    () => (myPubkey ? findUserCluster(myPubkey, clusters) : null),
-    [myPubkey, clusters],
-  );
-
-  const sortedClusters = useMemo(() => {
-    const sorted = [...clusters].sort((a, b) => {
-      if (myCluster) {
-        if (a.id === myCluster.id) return -1;
-        if (b.id === myCluster.id) return 1;
-      }
-      return (connectivity.get(b.id) ?? 0) - (connectivity.get(a.id) ?? 0);
-    });
-    return sorted;
-  }, [clusters, myCluster, connectivity]);
-
+  // Channel guide: when a tagline does the "what's this channel about" job,
+  // two preview notes keep rows compact so more channels fit on screen
   const summaries = useMemo(
     () =>
       sortedClusters.map((cluster) => ({
         cluster,
-        notes: findRepresentativeNotes(cluster, allEvents, 3),
+        notes: findRepresentativeNotes(cluster, allEvents, cluster.tagline ? 2 : 3),
         bridges: bridges.get(cluster.id) ?? [],
       })),
     [sortedClusters, allEvents, bridges],
   );
+
+  // Which channels are "on air" (a member posted in the last 2h)
+  const lastPostTime = useActivityStore((s) => s.lastPostTime);
+  const nowSec = useNowSec();
+  const liveClusterIds = useMemo(() => {
+    const twoHoursAgo = nowSec - 7200;
+    const live = new Set<string>();
+    for (const c of sortedClusters) {
+      for (const pk of c.memberPubkeys) {
+        const last = lastPostTime.get(pk);
+        if (last && last > twoHoursAgo) {
+          live.add(c.id);
+          break;
+        }
+      }
+    }
+    return live;
+  }, [sortedClusters, lastPostTime, nowSec]);
 
   const handleClusterClick = (clusterId: string) => {
     selectCluster(clusterId);
@@ -244,7 +236,7 @@ export function ClusterOverviewPanel() {
                   profile?.displayName ||
                   profile?.name ||
                   rec.bridgePubkey.slice(0, 8) + "…";
-                const targetCluster = clusters.find(
+                const targetCluster = sortedClusters.find(
                   (c) => c.id === rec.targetClusterId,
                 );
                 return (
@@ -306,34 +298,63 @@ export function ClusterOverviewPanel() {
                 isMyCluster ? "bg-[#00ff41]/[0.04] border-l-2 border-l-[#00ff41]/30" : ""
               }`}
             >
-              {/* Cluster header */}
+              {/* Channel listing: name row + one-line deck */}
               <button
                 onClick={() => handleClusterClick(cluster.id)}
-                className="w-full px-3 py-2.5 text-left flex items-center gap-2"
+                className="w-full px-3 py-2.5 text-left"
               >
-                <div
-                  className="w-2 h-2 rounded-sm shrink-0"
-                  style={{ backgroundColor: cluster.color }}
-                />
-                <span
-                  className="font-mono text-[11px] font-medium truncate"
-                  style={{ color: cluster.color }}
-                >
-                  {cluster.label}
-                </span>
-                {isMyCluster && (
-                  <span className="font-mono text-[8px] text-[#00ff41]/60 shrink-0 border border-[#00ff41]/20 rounded px-1 uppercase">
-                    opr
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-2 h-2 rounded-sm shrink-0"
+                    style={{ backgroundColor: cluster.color }}
+                  />
+                  <span
+                    className="font-mono text-[11px] font-medium truncate"
+                    style={{ color: cluster.color }}
+                  >
+                    {cluster.label}
                   </span>
+                  {isMyCluster && (
+                    <span className="font-mono text-[8px] text-[#00ff41]/60 shrink-0 border border-[#00ff41]/20 rounded px-1 uppercase">
+                      opr
+                    </span>
+                  )}
+                  {isUnexplored && (
+                    <span className="font-mono text-[8px] text-red-400/80 shrink-0 border border-red-400/30 rounded px-1 uppercase">
+                      unexplored
+                    </span>
+                  )}
+                  {liveClusterIds.has(cluster.id) ? (
+                    <span
+                      className="ml-auto shrink-0 inline-flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.15em]"
+                      style={{ color: cluster.color }}
+                    >
+                      <span
+                        className="channel-dot channel-live w-1 h-1 rounded-full"
+                        style={
+                          {
+                            backgroundColor: cluster.color,
+                            "--cluster": cluster.color,
+                          } as React.CSSProperties
+                        }
+                      />
+                      on air
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] text-white/20 ml-auto shrink-0 tabular-nums">
+                      [{cluster.memberPubkeys.size}]
+                    </span>
+                  )}
+                </div>
+                {(cluster.tagline || cluster.hashtags.length > 0) && (
+                  <p className="font-mono text-[10px] text-[#00ff41]/35 leading-snug mt-0.5 pl-4 line-clamp-1">
+                    {cluster.tagline ??
+                      cluster.hashtags
+                        .slice(0, 3)
+                        .map((t) => `#${t}`)
+                        .join(" · ")}
+                  </p>
                 )}
-                {isUnexplored && (
-                  <span className="font-mono text-[8px] text-red-400/80 shrink-0 border border-red-400/30 rounded px-1 uppercase">
-                    unexplored
-                  </span>
-                )}
-                <span className="font-mono text-[10px] text-white/20 ml-auto shrink-0 tabular-nums">
-                  [{cluster.memberPubkeys.size}]
-                </span>
               </button>
 
               {/* Representative signals */}
@@ -377,7 +398,7 @@ export function ClusterOverviewPanel() {
               {clusterBridges.length > 0 && (
                 <BridgeSection
                   bridges={clusterBridges}
-                  clusters={clusters}
+                  clusters={sortedClusters}
                   profiles={profiles}
                 />
               )}

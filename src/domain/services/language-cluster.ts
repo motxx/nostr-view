@@ -88,6 +88,7 @@ export function detectLanguageClusters(
       return {
         id: `lang-${lang}`,
         label: lang,
+        tagline: `Posts written in ${lang}`,
         hashtags: topTags.slice(0, 10),
         memberPubkeys: members,
         color: getClusterColor(index),

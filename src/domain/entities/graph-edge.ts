@@ -1,4 +1,11 @@
-export type EdgeType = "follow" | "reaction" | "repost" | "reply";
+export type EdgeType =
+  | "follow"
+  | "reaction"
+  | "repost"
+  | "reply"
+  | "mention"
+  | "quote"
+  | "zap";
 
 export interface GraphEdge {
   source: string; // pubkey

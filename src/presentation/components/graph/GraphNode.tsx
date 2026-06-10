@@ -1,6 +1,6 @@
 import { useCallback, memo } from "react";
 import { type ThreeEvent } from "@react-three/fiber";
-import { influenceToColor, influenceToSize, tierBrightness } from "@/lib/graph-math";
+import { engagementToColor, engagementToSize, tierBrightness } from "@/lib/graph-math";
 import { SignalSprite } from "./visuals/SignalSprite";
 import { AvatarSphere } from "./visuals/AvatarSphere";
 import { LabelSprite } from "./visuals/LabelSprite";
@@ -16,12 +16,12 @@ export const GraphNode = memo(function GraphNode({
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
 }) {
-  const score = node.influenceScore;
-  const rawColor = influenceToColor(score, node.clusterColor);
+  const score = node.engagementScore;
+  const rawColor = engagementToColor(score, node.clusterColor);
   const tier = node.tier;
   // Tier-based brightness — hubs brighter, edges darker
   const color = tierBrightness(rawColor, tier);
-  const size = influenceToSize(score);
+  const size = engagementToSize(score);
   const dimFactor = node.isUnexplored ? 0.3 : 1;
 
   const handleClick = useCallback(

@@ -5,7 +5,9 @@ export interface GraphNodeData extends SimulationNode {
   id: string;
   name?: string;
   picture?: string;
-  influenceScore: number;
+  engagementScore: number;
+  /** 0..1 within-cluster engagement percentile → centripetal strength */
+  corePull: number;
   clusterId?: string;
   clusterColor?: string;
   tier: NodeTier;

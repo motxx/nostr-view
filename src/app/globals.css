@@ -220,3 +220,46 @@
 .osint-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 255, 65, 0.3);
 }
+/* ── Channel surfing (cluster timeline) ── */
+@keyframes channel-wash {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes channel-flash {
+  from { opacity: 0.16; }
+  to   { opacity: 0; }
+}
+@keyframes channel-live {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cluster) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 4px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.channel-enter {
+  animation: channel-wash 180ms ease-out both;
+}
+.channel-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--cluster);
+  animation: channel-flash 180ms ease-out both;
+}
+.channel-dot.channel-live {
+  animation: channel-live 2s ease-out infinite;
+}
+
+/* Hide scrollbar on the channel rail */
+.channel-rail {
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, black 14px, black calc(100% - 14px), transparent);
+}
+.channel-rail::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .channel-enter { animation: none; }
+  .channel-flash { display: none; }
+  .channel-dot.channel-live { animation: none; }
+}

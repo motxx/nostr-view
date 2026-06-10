@@ -8,6 +8,7 @@ import {
   fetchRecentNotes,
   fetchInteractions,
   fetchProfiles,
+  fetchZapsForAuthors,
   subscribeLiveNotes,
 } from "@/infra/nostr/event-fetcher";
 import { closePool } from "@/infra/nostr/relay-pool-impl";
@@ -69,6 +70,21 @@ export function useNostrEvents() {
       const profiles = await fetchProfiles(authorPubkeys!);
       useEventStore.getState().addEvents(profiles);
       return profiles.length;
+    },
+    enabled: !!authorPubkeys && authorPubkeys.length > 0,
+    staleTime: Infinity,
+  });
+
+  // ── Zap receipts for visible authors (depends on initial data) ──
+  // Targeted #p query: zap edges are the strongest interaction signal
+  // (NIP-57), and the global window query alone misses most of them.
+  useQuery({
+    queryKey: ["nostr", "zaps", authorPubkeys],
+    queryFn: async () => {
+      const since = Math.floor(Date.now() / 1000) - 2 * 60 * 60;
+      const zaps = await fetchZapsForAuthors(authorPubkeys!, since);
+      useEventStore.getState().addEvents(zaps);
+      return zaps.length;
     },
     enabled: !!authorPubkeys && authorPubkeys.length > 0,
     staleTime: Infinity,

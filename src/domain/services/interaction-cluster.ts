@@ -1,15 +1,26 @@
 import type { NostrEvent } from "@/domain/entities/nostr-event";
-import { getReferencedPubkeys } from "@/domain/entities/nostr-event";
 import { type Cluster, getClusterColor } from "@/domain/entities/cluster";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
 import { louvain, addUndirectedEdge, type WeightedGraph } from "./louvain";
 import { rankClusterHashtags } from "./cluster-labeling";
+import {
+  extractAllInteractionEdges,
+  type InteractionEdgeType,
+} from "./interaction-edges";
 
 /**
- * Edge weights for the social interaction graph.
+ * Edge weights for the social interaction graph, ordered by the effort /
+ * intent the interaction costs the actor:
  *
- * Replies signal the strongest mutual engagement, reposts endorsement,
- * reactions lightweight approval.
+ * - zap (4.0): costs actual sats — the strongest signal (NIP-57)
+ * - reply (2.0): direct conversation (NIP-10 reply target only)
+ * - repost / quote (1.5): endorsement
+ * - reaction (1.0): lightweight approval (NIP-25 last-p target only)
+ * - mention (1.0): thread ancestors + mentions — co-participation
+ *
+ * Sensitivity measured on real relay data: community structure is driven
+ * by WHICH pairs interact, not the exact weight ratios (Q varied only
+ * 0.776–0.795 across ratio permutations, including inverted).
  *
  * Follows are EXCLUDED (weight 0), validated on real relay data
  * (scripts/eval-clustering.ts): kind-3 contact lists are years of
@@ -20,17 +31,15 @@ import { rankClusterHashtags } from "./cluster-labeling";
  * only after a producer-producer cosine-similarity transform at a scale
  * where that signal dominates; raw follow edges at this scale are noise.
  */
-export interface InteractionWeights {
-  reply: number;
-  repost: number;
-  reaction: number;
-  follow: number;
-}
+export type InteractionWeights = Record<InteractionEdgeType, number>;
 
 export const INTERACTION_WEIGHTS: InteractionWeights = {
+  zap: 4.0,
   reply: 2.0,
   repost: 1.5,
+  quote: 1.5,
   reaction: 1.0,
+  mention: 1.0,
   follow: 0,
 };
 
@@ -46,6 +55,7 @@ export const INTERACTION_WEIGHTS: InteractionWeights = {
  * authors, so clustering anyone else is wasted. SimClusters applies the
  * same idea by clustering producers only.
  *
+ * Edge semantics come from the NIP-aware extractor (interaction-edges.ts).
  * Shared with cluster quality evaluation (modularity is measured against
  * this graph regardless of which facet produced the partition).
  */
@@ -59,32 +69,11 @@ export function buildInteractionGraph(
   }
 
   const graph: WeightedGraph = new Map();
-  const addActiveEdge = (a: string, b: string, weight: number) => {
-    if (weight <= 0) return;
-    if (active.has(a) && active.has(b)) addUndirectedEdge(graph, a, b, weight);
-  };
-
-  for (const event of events) {
-    const refs = getReferencedPubkeys(event);
-    if (refs.length === 0) continue;
-
-    switch (event.kind) {
-      case NOSTR_KIND.TEXT_NOTE:
-        for (const ref of refs)
-          addActiveEdge(event.pubkey, ref, weights.reply);
-        break;
-      case NOSTR_KIND.REACTION:
-        for (const ref of refs)
-          addActiveEdge(event.pubkey, ref, weights.reaction);
-        break;
-      case NOSTR_KIND.REPOST:
-        for (const ref of refs)
-          addActiveEdge(event.pubkey, ref, weights.repost);
-        break;
-      case NOSTR_KIND.CONTACT_LIST:
-        for (const ref of refs)
-          addActiveEdge(event.pubkey, ref, weights.follow);
-        break;
+  for (const edge of extractAllInteractionEdges(events)) {
+    const weight = weights[edge.type];
+    if (weight <= 0) continue;
+    if (active.has(edge.source) && active.has(edge.target)) {
+      addUndirectedEdge(graph, edge.source, edge.target, weight);
     }
   }
   return graph;

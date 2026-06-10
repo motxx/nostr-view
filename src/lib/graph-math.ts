@@ -5,7 +5,7 @@ export const DEFAULT_TIER: NodeTier = "edge";
 export interface TieredNode {
   id: string;
   tier: NodeTier;
-  influenceScore: number;
+  engagementScore: number;
 }
 
 /**
@@ -13,10 +13,10 @@ export interface TieredNode {
  * Hub: top 10, Node: next 40, Edge: rest
  */
 export function assignTiers(
-  nodes: { id: string; influenceScore: number }[],
+  nodes: { id: string; engagementScore: number }[],
 ): Map<string, NodeTier> {
   const sorted = [...nodes].sort(
-    (a, b) => b.influenceScore - a.influenceScore,
+    (a, b) => b.engagementScore - a.engagementScore,
   );
   const map = new Map<string, NodeTier>();
   sorted.forEach((n, i) => {
@@ -29,11 +29,11 @@ export function assignTiers(
 
 /* ── Score helpers ── */
 
-export function influenceToSize(score: number): number {
+export function engagementToSize(score: number): number {
   return Math.max(2, Math.min(20, 2 + Math.log1p(score) * 3));
 }
 
-export function influenceToColor(score: number, baseColor?: string): string {
+export function engagementToColor(score: number, baseColor?: string): string {
   if (baseColor) return baseColor;
   // Warm-to-cool gradient: low score → warm amber, high score → cool white
   const t = Math.min(1, score / 100);

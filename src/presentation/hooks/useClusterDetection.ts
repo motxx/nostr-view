@@ -5,7 +5,7 @@ import { useGraphStore } from "@/store/graph-store";
 import { useEventStore } from "@/store/event-store";
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
-import { clusterFingerprint } from "@/domain/entities/cluster";
+import { applyLabelOverrides } from "@/domain/entities/cluster";
 
 export function useClusterTimeline(clusterId: string | null) {
   const rawClusters = useGraphStore((s) => s.clusters);
@@ -13,13 +13,10 @@ export function useClusterTimeline(clusterId: string | null) {
   const getEventsByKind = useEventStore((s) => s.getEventsByKind);
   const profiles = useEventStore((s) => s.profiles);
 
-  const clusters = useMemo(() => {
-    if (labelOverrides.size === 0) return rawClusters;
-    return rawClusters.map((c) => {
-      const override = labelOverrides.get(clusterFingerprint(c));
-      return override ? { ...c, label: override } : c;
-    });
-  }, [rawClusters, labelOverrides]);
+  const clusters = useMemo(
+    () => applyLabelOverrides(rawClusters, labelOverrides),
+    [rawClusters, labelOverrides],
+  );
 
   return useMemo(() => {
     if (!clusterId) return { events: [], cluster: null };

@@ -112,12 +112,16 @@ export function NodeDetailCard() {
           </div>
         </div>
 
-        {/* Metrics grid */}
+        {/* Engagement breakdown — the score is recomputable from these */}
         <div className="grid grid-cols-4 gap-px mx-3 mb-3 border border-[#00ff41]/10 rounded overflow-hidden">
-          <Stat label="SCORE" value={node.influenceScore.toFixed(1)} />
-          <Stat label="NOTES" value={String(node.noteCount)} />
+          <Stat label="ENGMT" value={node.engagementScore.toFixed(1)} />
+          <Stat label="ZAP" value={String(node.zapCount)} />
+          <Stat label="REPLY" value={String(node.replyCount)} />
           <Stat label="REACT" value={String(node.reactionCount)} />
           <Stat label="RPST" value={String(node.repostCount)} />
+          <Stat label="MUTUAL" value={String(node.reciprocalCount)} />
+          <Stat label="NOTES" value={String(node.noteCount)} />
+          <Stat label="FLWR" value={String(node.followerCount)} />
         </div>
 
         {/* Latest intercept */}

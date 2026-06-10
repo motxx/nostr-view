@@ -17,6 +17,7 @@ import {
   isNodeHighlighted,
   DEFAULT_TIER,
 } from "@/lib/graph-math";
+import { forceClusterCore, computeCorePull } from "@/lib/cluster-core-force";
 import { computeClusterCentroid } from "@/lib/nebula-manager";
 import { GraphNode } from "./GraphNode";
 import { GraphLinks } from "./GraphLinks";
@@ -57,21 +58,23 @@ export function ForceGraphScene() {
     return set;
   }, [explorationMap]);
 
-  // Build graph data for simulation
-  const graphNodes: GraphNodeData[] = useMemo(
-    () =>
-      nodes.map((n) => ({
-        id: n.id,
-        name: n.name,
-        picture: n.picture,
-        influenceScore: n.influenceScore,
-        clusterId: n.clusterId,
-        clusterColor: n.clusterId ? clusterColorMap.get(n.clusterId) : undefined,
-        tier: tierMap.get(n.id) ?? DEFAULT_TIER,
-        isUnexplored: n.clusterId ? unexploredClusterIds.has(n.clusterId) : false,
-      })),
-    [nodes, tierMap, clusterColorMap, unexploredClusterIds],
-  );
+  // Build graph data for simulation. corePull = within-cluster engagement
+  // percentile: the most-engaged members of each community gravitate to
+  // their nebula's core (influencer-central layout).
+  const graphNodes: GraphNodeData[] = useMemo(() => {
+    const corePull = computeCorePull(nodes);
+    return nodes.map((n) => ({
+      id: n.id,
+      name: n.name,
+      picture: n.picture,
+      engagementScore: n.engagementScore,
+      corePull: corePull.get(n.id) ?? 0,
+      clusterId: n.clusterId,
+      clusterColor: n.clusterId ? clusterColorMap.get(n.clusterId) : undefined,
+      tier: tierMap.get(n.id) ?? DEFAULT_TIER,
+      isUnexplored: n.clusterId ? unexploredClusterIds.has(n.clusterId) : false,
+    }));
+  }, [nodes, tierMap, clusterColorMap, unexploredClusterIds]);
 
   const graphLinks: GraphLinkData[] = useMemo(
     () =>
@@ -116,6 +119,7 @@ export function ForceGraphScene() {
       )
       .force("charge", forceManyBody().strength(-40).distanceMax(300))
       .force("center", forceCenter(0, 0, 0).strength(0.05))
+      .force("clusterCore", forceClusterCore())
       .alphaDecay(0.02)
       .velocityDecay(0.4);
 

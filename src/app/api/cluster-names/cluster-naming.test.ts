@@ -51,8 +51,8 @@ describe("buildClusterNamingPrompt", () => {
     expect(prompt).toContain("(none)");
   });
 
-  it("truncates sample content to 150 chars", () => {
-    const longContent = "x".repeat(200);
+  it("truncates sample content to 200 chars", () => {
+    const longContent = "x".repeat(250);
     const input: ClusterInput[] = [{
       id: "c1",
       currentLabel: "test",
@@ -61,23 +61,28 @@ describe("buildClusterNamingPrompt", () => {
       sampleContent: [longContent],
     }];
     const prompt = buildClusterNamingPrompt(input);
-    // 150 x's + "    - " prefix
-    expect(prompt).not.toContain("x".repeat(151));
-    expect(prompt).toContain("x".repeat(150));
+    expect(prompt).not.toContain("x".repeat(201));
+    expect(prompt).toContain("x".repeat(200));
   });
 
-  it("limits to 3 sample posts", () => {
+  it("limits to 5 sample posts", () => {
     const input: ClusterInput[] = [{
       id: "c1",
       currentLabel: "test",
       hashtags: [],
       memberCount: 1,
-      sampleContent: ["post1", "post2", "post3", "post4", "post5"],
+      sampleContent: ["post1", "post2", "post3", "post4", "post5", "post6"],
     }];
     const prompt = buildClusterNamingPrompt(input);
     expect(prompt).toContain("post1");
-    expect(prompt).toContain("post3");
-    expect(prompt).not.toContain("post4");
+    expect(prompt).toContain("post5");
+    expect(prompt).not.toContain("post6");
+  });
+
+  it("asks for label and tagline", () => {
+    const prompt = buildClusterNamingPrompt(clusters);
+    expect(prompt).toContain('"label"');
+    expect(prompt).toContain('"tagline"');
   });
 
   it("limits to 10 hashtags", () => {
@@ -136,6 +141,21 @@ describe("parseClusterNamesResponse", () => {
     const results = parseClusterNamesResponse(content);
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe("c1");
+  });
+
+  it("parses taglines when present", () => {
+    const content =
+      '[{"id":"c1","label":"Lightning Garage","tagline":"Posts about running LN nodes"}]';
+    const results = parseClusterNamesResponse(content);
+    expect(results[0].tagline).toBe("Posts about running LN nodes");
+  });
+
+  it("drops non-string or empty taglines", () => {
+    const content =
+      '[{"id":"c1","label":"A","tagline":123},{"id":"c2","label":"B","tagline":""}]';
+    const results = parseClusterNamesResponse(content);
+    expect(results[0].tagline).toBeUndefined();
+    expect(results[1].tagline).toBeUndefined();
   });
 
   it("handles multiline JSON response", () => {

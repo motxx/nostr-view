@@ -20,11 +20,41 @@ export async function fetchInteractions(
   limit: number = 500,
 ): Promise<NostrEvent[]> {
   const filter: Filter = {
-    kinds: [NOSTR_KIND.REACTION, NOSTR_KIND.REPOST],
+    kinds: [NOSTR_KIND.REACTION, NOSTR_KIND.REPOST, NOSTR_KIND.ZAP_RECEIPT],
     since,
     limit,
   };
   return queryEvents([filter]);
+}
+
+/**
+ * Zap receipts received by the given authors (NIP-57). Targeted #p query —
+ * the global window query only catches zaps that happen to be in the same
+ * relay window, this fills in the rest for the users we actually render.
+ */
+export async function fetchZapsForAuthors(
+  pubkeys: string[],
+  since: number,
+  limit: number = 500,
+): Promise<NostrEvent[]> {
+  if (pubkeys.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < pubkeys.length; i += 100) {
+    chunks.push(pubkeys.slice(i, i + 100));
+  }
+  const results: NostrEvent[] = [];
+  for (const chunk of chunks) {
+    const events = await queryEvents([
+      {
+        kinds: [NOSTR_KIND.ZAP_RECEIPT],
+        "#p": chunk,
+        since,
+        limit: Math.ceil(limit / chunks.length),
+      },
+    ]);
+    results.push(...events);
+  }
+  return results;
 }
 
 export async function fetchContactLists(
@@ -169,6 +199,7 @@ export function subscribeLiveNotes(
       NOSTR_KIND.TEXT_NOTE,
       NOSTR_KIND.REACTION,
       NOSTR_KIND.REPOST,
+      NOSTR_KIND.ZAP_RECEIPT,
     ],
     since: Math.floor(Date.now() / 1000),
   };

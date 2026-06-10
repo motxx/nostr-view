@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   assignTiers,
-  influenceToSize,
-  influenceToColor,
+  engagementToSize,
+  engagementToColor,
   pulsePeriod,
   tierBrightness,
   isEdgeActive,
@@ -14,7 +14,7 @@ describe("assignTiers", () => {
   it("assigns hub to top 10 nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
-      influenceScore: 60 - i,
+      engagementScore: 60 - i,
     }));
     const tiers = assignTiers(nodes);
 
@@ -27,7 +27,7 @@ describe("assignTiers", () => {
   it("assigns node to next 40 nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
-      influenceScore: 60 - i,
+      engagementScore: 60 - i,
     }));
     const tiers = assignTiers(nodes);
 
@@ -39,7 +39,7 @@ describe("assignTiers", () => {
   it("assigns edge to remaining nodes", () => {
     const nodes = Array.from({ length: 60 }, (_, i) => ({
       id: `n${i}`,
-      influenceScore: 60 - i,
+      engagementScore: 60 - i,
     }));
     const tiers = assignTiers(nodes);
 
@@ -50,8 +50,8 @@ describe("assignTiers", () => {
 
   it("handles fewer than 10 nodes — all are hubs", () => {
     const nodes = [
-      { id: "a", influenceScore: 10 },
-      { id: "b", influenceScore: 5 },
+      { id: "a", engagementScore: 10 },
+      { id: "b", engagementScore: 5 },
     ];
     const tiers = assignTiers(nodes);
     expect(tiers.get("a")).toBe("hub");
@@ -59,27 +59,27 @@ describe("assignTiers", () => {
   });
 });
 
-describe("influenceToSize", () => {
+describe("engagementToSize", () => {
   it("returns minimum 2 for score 0", () => {
-    expect(influenceToSize(0)).toBe(2);
+    expect(engagementToSize(0)).toBe(2);
   });
 
   it("returns at most 20", () => {
-    expect(influenceToSize(999999)).toBeLessThanOrEqual(20);
+    expect(engagementToSize(999999)).toBeLessThanOrEqual(20);
   });
 
   it("increases with score", () => {
-    expect(influenceToSize(50)).toBeGreaterThan(influenceToSize(1));
+    expect(engagementToSize(50)).toBeGreaterThan(engagementToSize(1));
   });
 });
 
-describe("influenceToColor", () => {
+describe("engagementToColor", () => {
   it("returns baseColor when provided", () => {
-    expect(influenceToColor(50, "#ff0000")).toBe("#ff0000");
+    expect(engagementToColor(50, "#ff0000")).toBe("#ff0000");
   });
 
   it("returns a valid hex color", () => {
-    const color = influenceToColor(50);
+    const color = engagementToColor(50);
     expect(color).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

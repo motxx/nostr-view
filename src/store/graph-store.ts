@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { GraphNode } from "@/domain/entities/graph-node";
 import type { GraphEdge } from "@/domain/entities/graph-edge";
-import type { Cluster } from "@/domain/entities/cluster";
+import type { Cluster, ClusterLabelOverride } from "@/domain/entities/cluster";
 import type { BridgeInfo } from "@/domain/services/cluster-summary";
 import type { ExplorationMap } from "@/domain/services/exploration-map";
 import type { ClusterStrategy } from "@/domain/services/cluster-strategy";
@@ -18,10 +18,10 @@ interface GraphStore {
   /** Quality of each evaluated facet (all four in auto mode) */
   clusterQualities: Partial<Record<ClusterStrategy, ClusterQuality>>;
   lastUpdated: number;
-  /** LLM-generated label overrides, keyed by content-based fingerprint
-   *  (clusterFingerprint()). Separate from clusters so that periodic
-   *  setAll() doesn't overwrite them. */
-  clusterLabelOverrides: Map<string, string>;
+  /** LLM-generated label/tagline overrides, keyed by content-based
+   *  fingerprint (clusterFingerprint()). Separate from clusters so that
+   *  periodic setAll() doesn't overwrite them. */
+  clusterLabelOverrides: Map<string, ClusterLabelOverride>;
 
   setGraphData: (nodes: GraphNode[], edges: GraphEdge[]) => void;
   setClusters: (clusters: Cluster[]) => void;
@@ -36,7 +36,7 @@ interface GraphStore {
     resolvedStrategy: ClusterStrategy | null;
     clusterQualities: Partial<Record<ClusterStrategy, ClusterQuality>>;
   }) => void;
-  setClusterLabelOverrides: (labelMap: Map<string, string>) => void;
+  setClusterLabelOverrides: (labelMap: Map<string, ClusterLabelOverride>) => void;
   clearClusterLabelOverrides: () => void;
   clear: () => void;
 }
@@ -64,7 +64,7 @@ export const useGraphStore = create<GraphStore>((set) => ({
   setClusterLabelOverrides: (labelMap) =>
     set((state) => {
       const merged = new Map(state.clusterLabelOverrides);
-      for (const [id, label] of labelMap) merged.set(id, label);
+      for (const [id, override] of labelMap) merged.set(id, override);
       return { clusterLabelOverrides: merged };
     }),
 

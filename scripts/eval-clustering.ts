@@ -35,8 +35,27 @@ import { evaluateClusterQuality } from "../src/domain/services/cluster-quality";
 import {
   buildInteractionGraph,
   INTERACTION_WEIGHTS,
+  type InteractionWeights,
 } from "../src/domain/services/interaction-cluster";
-import { louvain } from "../src/domain/services/louvain";
+import {
+  louvain,
+  addUndirectedEdge,
+  type WeightedGraph,
+} from "../src/domain/services/louvain";
+import {
+  calculateEngagement,
+  RECIPROCITY_WEIGHT,
+} from "../src/domain/services/engagement";
+
+const ZERO_WEIGHTS: InteractionWeights = {
+  zap: 0,
+  reply: 0,
+  repost: 0,
+  quote: 0,
+  reaction: 0,
+  mention: 0,
+  follow: 0,
+};
 
 const RELAYS = [
   "wss://relay.nostr.band",
@@ -67,11 +86,11 @@ async function fetchEvents(): Promise<NostrEvent[]> {
   console.log(`  notes: ${notes.length}`);
 
   const interactions = await query({
-    kinds: [NOSTR_KIND.REACTION, NOSTR_KIND.REPOST],
+    kinds: [NOSTR_KIND.REACTION, NOSTR_KIND.REPOST, NOSTR_KIND.ZAP_RECEIPT],
     since,
     limit: 1500,
   });
-  console.log(`  reactions/reposts: ${interactions.length}`);
+  console.log(`  reactions/reposts/zaps: ${interactions.length}`);
 
   const authors = [...new Set(notes.map((e) => e.pubkey))].slice(0, 300);
   const contacts: NostrEvent[] = [];
@@ -84,9 +103,21 @@ async function fetchEvents(): Promise<NostrEvent[]> {
   }
   console.log(`  contact lists: ${contacts.length}`);
 
+  // Targeted zap receipts for the visible authors (mirrors the app)
+  const zaps: NostrEvent[] = [];
+  for (let i = 0; i < authors.length; i += 100) {
+    const chunk = await query({
+      kinds: [NOSTR_KIND.ZAP_RECEIPT],
+      "#p": authors.slice(i, i + 100),
+      since,
+    });
+    zaps.push(...(chunk as NostrEvent[]));
+  }
+  console.log(`  targeted zap receipts: ${zaps.length}`);
+
   pool.close(RELAYS);
 
-  const all = [...notes, ...interactions, ...contacts] as NostrEvent[];
+  const all = [...notes, ...interactions, ...contacts, ...zaps] as NostrEvent[];
   // dedupe by id
   const byId = new Map<string, NostrEvent>();
   for (const e of all) byId.set(e.id, e);
@@ -243,6 +274,33 @@ function legacyGreedyTopic(
     .slice(0, maxClusters);
 }
 
+/**
+ * The pre-NIP-aware interaction graph: every p-tag of every event becomes
+ * an edge (active users only). Kept for before/after comparison.
+ */
+function legacyPtagGraph(events: NostrEvent[]): WeightedGraph {
+  const active = new Set<string>();
+  for (const e of events) {
+    if (e.kind === NOSTR_KIND.TEXT_NOTE) active.add(e.pubkey);
+  }
+  const graph: WeightedGraph = new Map();
+  for (const event of events) {
+    let weight = 0;
+    switch (event.kind) {
+      case NOSTR_KIND.TEXT_NOTE: weight = 2; break;
+      case NOSTR_KIND.REPOST: weight = 1.5; break;
+      case NOSTR_KIND.REACTION: weight = 1; break;
+      default: continue;
+    }
+    for (const ref of getReferencedPubkeys(event)) {
+      if (active.has(event.pubkey) && active.has(ref) && event.pubkey !== ref) {
+        addUndirectedEdge(graph, event.pubkey, ref, weight);
+      }
+    }
+  }
+  return graph;
+}
+
 // ───────────────────────── evaluate ─────────────────────────
 
 function memberSignature(clusters: Cluster[]): string {
@@ -358,6 +416,62 @@ function run(events: NostrEvent[]) {
     );
   }
 
+  console.log("\n── Edge extraction: legacy all-p-tags vs NIP-aware ──");
+  for (const [name, graph] of [
+    ["legacy p-tag graph", legacyPtagGraph(events)],
+    ["NIP-aware graph (new)", buildInteractionGraph(events)],
+  ] as [string, WeightedGraph][]) {
+    let edgeCount = 0;
+    for (const adj of graph.values()) edgeCount += adj.size;
+    const { communities, modularity } = louvain(graph);
+    const sizes = new Map<number, number>();
+    for (const c of communities.values()) sizes.set(c, (sizes.get(c) ?? 0) + 1);
+    const big = [...sizes.values()].filter((s) => s >= 3).sort((a, b) => b - a);
+    console.log(
+      `  ${name.padEnd(24)} nodes=${graph.size} edges=${edgeCount / 2}  ` +
+        `Q=${modularity.toFixed(3)}  communities(≥3)=${big.length}  ` +
+        `sizes=[${big.slice(0, 8).join(", ")}]`,
+    );
+  }
+
+  console.log("\n── Interaction-weight sweep (edge-type sensitivity) ──");
+  // Edge composition: how much graph mass does each event type contribute?
+  for (const type of ["reply", "mention", "quote", "repost", "reaction", "zap"] as const) {
+    const g = buildInteractionGraph(events, { ...ZERO_WEIGHTS, [type]: 1 });
+    let edges = 0;
+    for (const adj of g.values()) edges += adj.size;
+    console.log(`  composition: ${type.padEnd(9)} nodes=${String(g.size).padStart(3)} edges=${edges / 2}`);
+  }
+  for (const [name, w] of [
+    ["current", INTERACTION_WEIGHTS],
+    ["all equal", { ...INTERACTION_WEIGHTS, zap: 1, reply: 1, repost: 1, quote: 1, reaction: 1, mention: 1 }],
+    ["reply-dominant", { ...INTERACTION_WEIGHTS, zap: 1, reply: 4, repost: 1, quote: 1, reaction: 0.5, mention: 0.5 }],
+    ["no mentions", { ...INTERACTION_WEIGHTS, mention: 0 }],
+  ] as [string, InteractionWeights][]) {
+    const graph = buildInteractionGraph(events, w);
+    const { communities, modularity } = louvain(graph);
+    const sizes = new Map<number, number>();
+    for (const c of communities.values()) sizes.set(c, (sizes.get(c) ?? 0) + 1);
+    const big = [...sizes.values()].filter((s) => s >= 3).sort((a, b) => b - a);
+    console.log(
+      `  ${name.padEnd(24)} Q=${modularity.toFixed(3)}  communities(≥3)=${big.length}  ` +
+        `sizes=[${big.slice(0, 8).join(", ")}]`,
+    );
+  }
+
+  // NIP-10 concern: kind-1 p-tags include thread ancestors + mentions, not
+  // just the direct reply target. How many notes carry multiple p-tags?
+  const pTagCounts = events
+    .filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE)
+    .map((e) => e.tags.filter((t) => t[0] === "p").length)
+    .filter((n) => n > 0);
+  const multi = pTagCounts.filter((n) => n > 1).length;
+  const maxP = Math.max(0, ...pTagCounts);
+  console.log(
+    `  kind-1 notes with p-tags: ${pTagCounts.length}, ` +
+      `multi-p (thread ancestors/mentions): ${multi} (${Math.round((100 * multi) / Math.max(1, pTagCounts.length))}%), max p-tags=${maxP}`,
+  );
+
   console.log("\n── Topic facet: legacy greedy merge vs co-occurrence Louvain ──");
   rows.push(evaluate("Greedy merge (legacy)", (ev) => legacyGreedyTopic(ev), events));
   printRow(rows[rows.length - 1]);
@@ -370,6 +484,83 @@ function run(events: NostrEvent[]) {
   for (const s of ["language", "engagement"] as const) {
     rows.push(evaluate(s, (ev) => detectClustersByStrategy(ev, s), events));
     printRow(rows[rows.length - 1]);
+  }
+
+  console.log("\n── Engagement coefficients: validation on real data ──");
+  {
+    const { metrics } = calculateEngagement(events);
+    const authors = [...new Set(
+      events.filter((e) => e.kind === NOSTR_KIND.TEXT_NOTE).map((e) => e.pubkey),
+    )];
+
+    // 1. Spam resistance: prolific authors with zero received MUST score 0
+    const spamLike = authors.filter((pk) => {
+      const m = metrics.get(pk);
+      return m && m.noteCount >= 5 && m.receivedScore === 0;
+    });
+    const spamNonZero = spamLike.filter((pk) => metrics.get(pk)!.score > 0);
+    console.log(
+      `  spam check: ${spamLike.length} prolific-but-ignored authors, ` +
+        `${spamNonZero.length} with score>0 → ${spamNonZero.length === 0 ? "PASS (all 0)" : "FAIL"}`,
+    );
+
+    // 2. Top-10 composition: verifiable breakdown, inbound partner counts
+    const ranked = authors
+      .map((pk) => ({ pk, m: metrics.get(pk) }))
+      .filter((r) => r.m)
+      .sort((a, b) => b.m!.score - a.m!.score);
+    console.log("  top-10 by engagement (score = received + 2×mutual):");
+    for (const { pk, m } of ranked.slice(0, 10)) {
+      console.log(
+        `    ${pk.slice(0, 8)}…  score=${m!.score.toFixed(1).padStart(6)}  ` +
+          `zap=${m!.zapsReceived} reply=${m!.repliesReceived} react=${m!.reactionsReceived} ` +
+          `repost=${m!.repostsReceived + m!.quotesReceived} mention=${m!.mentionsReceived}  ` +
+          `inbound=${m!.inboundPartners} mutual=${m!.reciprocalPartners} notes=${m!.noteCount}`,
+      );
+    }
+
+    // 3. Coefficient sensitivity: is the top-10 ranking robust to the
+    //    ad-hoc weight choices? (acceptance: overlap >= 7/10 per variant)
+    const baseTop = new Set(ranked.slice(0, 10).map((r) => r.pk));
+    const variants: [string, InteractionWeights][] = [
+      ["all equal 1", { ...INTERACTION_WEIGHTS, zap: 1, reply: 1, repost: 1, quote: 1, reaction: 1, mention: 1 }],
+      ["zap-heavy 8", { ...INTERACTION_WEIGHTS, zap: 8 }],
+      ["mention-free", { ...INTERACTION_WEIGHTS, mention: 0 }],
+    ];
+    let allRobust = true;
+    for (const [name, w] of variants) {
+      const alt = calculateEngagement(events, w);
+      const altTop = authors
+        .map((pk) => ({ pk, s: alt.scores[pk] ?? 0 }))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 10);
+      const overlap = altTop.filter((r) => baseTop.has(r.pk)).length;
+      if (overlap < 7) allRobust = false;
+      console.log(`  sensitivity ${name.padEnd(14)} top-10 overlap=${overlap}/10`);
+    }
+
+    // 4. Attention breadth sanity: high scores should come from MANY
+    //    distinct people (Spearman rank corr. score vs inboundPartners)
+    const engaged = ranked.filter((r) => r.m!.score > 0);
+    const rankOf = (arr: typeof engaged, key: (m: NonNullable<typeof engaged[0]["m"]>) => number) => {
+      const sorted = [...arr].sort((a, b) => key(b.m!) - key(a.m!));
+      const map = new Map<string, number>();
+      sorted.forEach((r, i) => map.set(r.pk, i));
+      return map;
+    };
+    const r1 = rankOf(engaged, (m) => m.score);
+    const r2 = rankOf(engaged, (m) => m.inboundPartners);
+    let d2 = 0;
+    for (const { pk } of engaged) d2 += (r1.get(pk)! - r2.get(pk)!) ** 2;
+    const n = engaged.length;
+    const spearman = n > 2 ? 1 - (6 * d2) / (n * (n * n - 1)) : 1;
+    console.log(
+      `  rank corr(score, distinct inbound partners) = ${spearman.toFixed(3)} ` +
+        `(${spearman > 0.7 ? "PASS" : "check"}), reciprocity weight = ${RECIPROCITY_WEIGHT}`,
+    );
+    console.log(
+      `  verdict: ${spamNonZero.length === 0 && allRobust && spearman > 0.7 ? "coefficients ACCEPTED (spam=0, ranking robust, breadth-aligned)" : "needs tuning"}`,
+    );
   }
 
   console.log("\n── Auto selection ──");
@@ -402,15 +593,17 @@ function run(events: NostrEvent[]) {
 // ───────────────────────── main ─────────────────────────
 
 const mode = process.argv[2] ?? "auto";
+// optional dataset override: bun scripts/eval-clustering.ts run <cache.json>
+const cacheFile = process.argv[3] ?? CACHE_FILE;
 mkdirSync(dirname(CACHE_FILE), { recursive: true });
 
-if (mode === "fetch" || (mode === "auto" && !existsSync(CACHE_FILE))) {
+if (mode === "fetch" || (mode === "auto" && !existsSync(cacheFile))) {
   const events = await fetchEvents();
-  writeFileSync(CACHE_FILE, JSON.stringify(events));
-  console.log(`Cached ${events.length} events → ${CACHE_FILE}`);
+  writeFileSync(cacheFile, JSON.stringify(events));
+  console.log(`Cached ${events.length} events → ${cacheFile}`);
   if (mode === "fetch") process.exit(0);
 }
 
-const events: NostrEvent[] = JSON.parse(readFileSync(CACHE_FILE, "utf8"));
+const events: NostrEvent[] = JSON.parse(readFileSync(cacheFile, "utf8"));
 run(events);
 process.exit(0);

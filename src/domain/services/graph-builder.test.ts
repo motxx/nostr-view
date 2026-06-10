@@ -50,7 +50,27 @@ describe("buildGraph", () => {
     expect(nodes[0].picture).toBe("https://example.com/alice.png");
   });
 
-  it("builds reply edges between note authors", () => {
+  it("builds reply edges between note authors (NIP-10 e-tag)", () => {
+    const events = [
+      makeEvent({ pubkey: "alice", kind: NOSTR_KIND.TEXT_NOTE }),
+      makeEvent({ pubkey: "bob", kind: NOSTR_KIND.TEXT_NOTE, id: "bob-note" }),
+      makeEvent({
+        pubkey: "alice",
+        kind: NOSTR_KIND.TEXT_NOTE,
+        tags: [
+          ["e", "bob-note", "", "reply"],
+          ["p", "bob"],
+        ],
+      }),
+    ];
+    const { edges } = buildGraph(events, new Map(), []);
+    const replies = edges.filter((e) => e.type === "reply");
+    expect(replies).toHaveLength(1);
+    expect(replies[0].source).toBe("alice");
+    expect(replies[0].target).toBe("bob");
+  });
+
+  it("treats bare p-tags (no e-tag) as mention edges", () => {
     const events = [
       makeEvent({ pubkey: "alice", kind: NOSTR_KIND.TEXT_NOTE }),
       makeEvent({ pubkey: "bob", kind: NOSTR_KIND.TEXT_NOTE }),
@@ -61,10 +81,9 @@ describe("buildGraph", () => {
       }),
     ];
     const { edges } = buildGraph(events, new Map(), []);
-    const replies = edges.filter((e) => e.type === "reply");
-    expect(replies).toHaveLength(1);
-    expect(replies[0].source).toBe("alice");
-    expect(replies[0].target).toBe("bob");
+    const mentions = edges.filter((e) => e.type === "mention");
+    expect(mentions).toHaveLength(1);
+    expect(mentions[0].target).toBe("bob");
   });
 
   it("builds reaction edges", () => {
@@ -117,9 +136,30 @@ describe("buildGraph", () => {
       }),
     ];
     const { edges } = buildGraph(events, new Map(), []);
-    const replies = edges.filter(
-      (e) => e.type === "reply" && e.source === "alice" && e.target === "bob",
+    const mentions = edges.filter(
+      (e) => e.type === "mention" && e.source === "alice" && e.target === "bob",
     );
-    expect(replies).toHaveLength(1);
+    expect(mentions).toHaveLength(1);
+  });
+
+  it("builds zap edges between note authors (NIP-57)", () => {
+    const sender = "f".repeat(64);
+    const events = [
+      makeEvent({ pubkey: sender, kind: NOSTR_KIND.TEXT_NOTE }),
+      makeEvent({ pubkey: "alice", kind: NOSTR_KIND.TEXT_NOTE }),
+      makeEvent({
+        pubkey: "lnurl-server",
+        kind: NOSTR_KIND.ZAP_RECEIPT,
+        tags: [
+          ["p", "alice"],
+          ["P", sender],
+        ],
+      }),
+    ];
+    const { edges } = buildGraph(events, new Map(), []);
+    const zaps = edges.filter((e) => e.type === "zap");
+    expect(zaps).toHaveLength(1);
+    expect(zaps[0].source).toBe(sender);
+    expect(zaps[0].target).toBe("alice");
   });
 });

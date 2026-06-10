@@ -11,9 +11,20 @@ import {
   type ClusterStrategy,
 } from "@/domain/services/cluster-strategy";
 import { evaluateClusterQuality } from "@/domain/services/cluster-quality";
+import { reconcileClusters } from "@/domain/services/cluster-identity";
 import { computeBridges, findUserCluster } from "@/domain/services/cluster-summary";
 import { computeExplorationMap } from "@/domain/services/exploration-map";
 import { filterEventsByTimeRange } from "@/lib/event-histogram";
+
+/**
+ * Last computed clusters per facet — reconciliation target so cluster
+ * identity survives even when auto mode switches facets and back.
+ * Module-level on purpose: outlives query invalidations, single client.
+ */
+const lastClustersByStrategy = new Map<
+  ClusterStrategy,
+  import("@/domain/entities/cluster").Cluster[]
+>();
 
 /**
  * Periodically rebuilds the graph from accumulated events.
@@ -43,7 +54,10 @@ export function useGraphData() {
       let resolvedStrategy: ClusterStrategy;
       let clusterQualities: ReturnType<typeof selectBestClusters>["qualities"];
       if (strategy === "auto") {
-        const selection = selectBestClusters(events);
+        // Hysteresis: keep the incumbent facet unless clearly beaten,
+        // so near-tied facets don't flip the universe every refresh
+        const incumbent = useGraphStore.getState().resolvedStrategy ?? undefined;
+        const selection = selectBestClusters(events, 3, 10, incumbent);
         clusters = selection.clusters;
         resolvedStrategy = selection.strategy;
         clusterQualities = selection.qualities;
@@ -54,6 +68,16 @@ export function useGraphData() {
           [strategy]: evaluateClusterQuality(clusters, events),
         };
       }
+      // Carry cluster identity (id, color, naming fingerprint) across
+      // recomputes by member overlap, so headlines and the selected
+      // timeline stay stable while live data evolves. Matched against the
+      // last clusters of the SAME facet — survives auto-mode facet trips.
+      const previous = lastClustersByStrategy.get(resolvedStrategy);
+      if (previous) {
+        clusters = reconcileClusters(previous, clusters);
+      }
+      lastClustersByStrategy.set(resolvedStrategy, clusters);
+
       const { nodes, edges } = buildGraph(events, profiles, clusters);
 
       // Compute bridges and exploration map (Feature 2)

@@ -71,15 +71,22 @@ export interface StrategySelection {
  * yardstick (modularity vs the interaction graph + coverage + balance),
  * and return the best one. Deterministic: ties resolve in
  * CLUSTER_STRATEGIES order.
+ *
+ * `prefer` adds hysteresis for live recomputes: the incumbent facet is
+ * kept unless a challenger beats it by more than `hysteresis`. Without
+ * this, two near-tied facets (measured: interaction 0.585 vs engagement
+ * 0.582 on real data) flip the whole universe every refresh.
  */
 export function selectBestClusters(
   events: NostrEvent[],
   minClusterSize: number = 3,
   maxClusters: number = 10,
+  prefer?: ClusterStrategy,
+  hysteresis: number = 0.05,
 ): StrategySelection {
   const qualities: Partial<Record<ClusterStrategy, ClusterQuality>> = {};
-  let best: { strategy: ClusterStrategy; clusters: Cluster[]; score: number } | null =
-    null;
+  const clustersByStrategy = new Map<ClusterStrategy, Cluster[]>();
+  let best: { strategy: ClusterStrategy; score: number } | null = null;
 
   for (const strategy of CLUSTER_STRATEGIES) {
     const clusters = detectClustersByStrategy(
@@ -90,14 +97,25 @@ export function selectBestClusters(
     );
     const quality = evaluateClusterQuality(clusters, events);
     qualities[strategy] = quality;
+    clustersByStrategy.set(strategy, clusters);
     if (best === null || quality.score > best.score) {
-      best = { strategy, clusters, score: quality.score };
+      best = { strategy, score: quality.score };
     }
   }
 
+  let winner = best!.strategy;
+  if (
+    prefer !== undefined &&
+    winner !== prefer &&
+    qualities[prefer] !== undefined &&
+    best!.score - qualities[prefer]!.score < hysteresis
+  ) {
+    winner = prefer;
+  }
+
   return {
-    strategy: best!.strategy,
-    clusters: best!.clusters,
+    strategy: winner,
+    clusters: clustersByStrategy.get(winner)!,
     qualities,
   };
 }

@@ -1,7 +1,7 @@
 import type { NostrEvent } from "@/domain/entities/nostr-event";
 import type { Cluster } from "@/domain/entities/cluster";
 import { NOSTR_KIND } from "@/lib/nostr-kinds";
-import { calculateInfluence } from "./influence-calculator";
+import { calculateEngagement } from "./engagement";
 import { rankClusterHashtags } from "./cluster-labeling";
 
 /**
@@ -24,6 +24,7 @@ import { rankClusterHashtags } from "./cluster-labeling";
 interface SegmentDef {
   id: string;
   label: string;
+  tagline: string;
   color: string;
   /** evaluated in order; first match wins */
   matches: (r: number, fe: number) => boolean;
@@ -33,36 +34,42 @@ const SEGMENTS: SegmentDef[] = [
   {
     id: "engagement-champions",
     label: "Champions",
+    tagline: "Posting now and drawing the most engagement",
     color: "#ffa726", // warm gold — most valuable tier
     matches: (r, fe) => r >= 4 && fe >= 4,
   },
   {
     id: "engagement-loyal",
     label: "Loyal Voices",
+    tagline: "Steady regulars who post often and get responses",
     color: "#66bb6a",
     matches: (r, fe) => r >= 3 && fe >= 3,
   },
   {
     id: "engagement-rising",
     label: "Rising Stars",
+    tagline: "Fresh activity, engagement still building",
     color: "#26c6da",
     matches: (r, fe) => r >= 4 && fe < 3,
   },
   {
     id: "engagement-at-risk",
     label: "At Risk",
+    tagline: "Used to draw engagement, quiet lately",
     color: "#ef5350", // valuable but going quiet
     matches: (r, fe) => r <= 2 && fe >= 3,
   },
   {
     id: "engagement-hibernating",
     label: "Hibernating",
+    tagline: "Little recent activity or engagement",
     color: "#78909c",
     matches: (r, fe) => r <= 2 && fe < 3,
   },
   {
     id: "engagement-casual",
     label: "Casual",
+    tagline: "Occasional posters in the middle of the pack",
     color: "#4fc3f7",
     matches: () => true,
   },
@@ -103,14 +110,12 @@ export function detectEngagementClusters(
   }
   if (recency.size === 0) return [];
 
-  const { metrics } = calculateInfluence(events);
+  // E = engagement received (NIP-aware, intent-weighted, spam-resistant
+  // — see engagement.ts). Replaces the old followers+reactions formula.
+  const { scores } = calculateEngagement(events);
   const engagement = new Map<string, number>();
   for (const pk of recency.keys()) {
-    const m = metrics.get(pk);
-    engagement.set(
-      pk,
-      m ? m.followerCount + m.reactionCount * 0.5 + m.repostCount * 2 : 0,
-    );
+    engagement.set(pk, scores[pk] ?? 0);
   }
 
   const rScores = quintileScores(recency);
@@ -143,6 +148,7 @@ export function detectEngagementClusters(
   return kept.map((s) => ({
     id: s.id,
     label: s.label,
+    tagline: s.tagline,
     hashtags: (rankedTags.get(s.id) ?? []).slice(0, 10),
     memberPubkeys: segmentMembers.get(s.id)!,
     color: s.color,
